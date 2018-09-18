@@ -13,8 +13,8 @@ __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
-__all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
-
+__all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'spot', 'hgz', 'lhp']
+__all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci']
 
 class DefineParcel(object):
     '''
@@ -2317,7 +2317,7 @@ def sherb(prof, **kwargs):
             # if the effective inflow layer hasn't been specified via the function arguments
             # or doesn't exist in the Profile object we need to calculate it, but we need mupcl
             if ebottom is None or etop is None:
-                #only calculate ebottom and etop if they're not supplied by the kwargs
+                # only calculate ebottom and etop if they're not supplied by the kwargs
                 if not hasattr(prof, 'mupcl') or not kwargs.get('mupcl', None):
                     # If the mupcl attribute doesn't exist in the Profile
                     # or the mupcl hasn't been passed as an argument
@@ -2948,6 +2948,101 @@ def sweat(prof):
 
     return sweat
 
+def spot(prof):
+    '''
+        SPOT Index
+
+        The Surface Potential (SPOT) Index, unlike most other forecasting indices,
+        uses only data collected from the surface level.  As such, it has the
+        advantage of being able to use surface plots, which usually update hourly
+        instead of every 12 to 24 hours as with upper-air observations.
+
+        Using the the SWEAT and SPOT values together tends to offer more skill
+        than using either index by itself.
+
+        The SPOT Index is computed using the following numbers:
+
+        1.) Surface ambient temperature (in degrees Fahrenheit)
+        2.) Surface dewpoint temperature (in degrees Fahrenheit)
+        3.) Altimeter setting (in inches of mercury (inHg))
+        4.) Wind direction
+        5.) Wind speed (in knots)
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        spot : number
+            SPOT Index (number)
+    '''
+
+    tmpc = prof.tmpc[prof.sfc]
+    dwpc = prof.dwpc[prof.sfc]
+    sfc_pres = prof.pres[prof.sfc]
+    sfc_hght = prof.hght[prof.sfc]
+    vecsfc = prof.vec[prof.sfc]
+
+    # Translate temperatures from Celsius to Fahrenheit
+    tmpf = thermo.ctof(tmpc)
+    dwpf = thermo.ctof(dwpc)
+
+    # Calculate altimeter setting
+    asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** ( 1 / 0.190163 )) * (( 0.0065 * sfc_hght ) / 288.15))) ** ( 0.190163 )) # Calculate altimeter setting in millibars
+    asi = asm * ( 514731 / 15200 ) # Translate altimeter setting from millibars to inHg
+
+    # Ambient temperature factor
+    taf = tmpf - 60
+
+    # Dewpoint temperature factor
+    tdf = dwpf - 55
+
+    # Altimeter setting factor
+    if tmpf < 50 and asi < 29.50:
+        asf = 50 * ( 30 - asi )
+    else:
+        asf = 100 * ( 30 - asi )
+    
+    # Wind vector factor
+    if 0 <= vecsfc[0] and vecsfc[0] < 40:
+        if dwpf < 55:
+            wvf = -2 * vecsfc[1]
+        else:
+            wvf = -1 * vecsfc[1]
+    elif 40 <= vecsfc[0] and vecsfc[0] < 70:
+        wvf = 0
+    elif 70 <= vecsfc[0] and vecsfc[0] < 130:
+        if dwpf < 55:
+            wvf = vecsfc[1] / 2
+        else:
+            wvf = vecsfc[1]
+    elif 130 <= vecsfc[0] and vecsfc[0] <= 210:
+        if dwpc < 55:
+            wvf = vecsfc[1]
+        else:
+            wvf = 2 * vecsfc[1]
+    elif 210 < vecsfc[0] and vecsfc[0] <= 230:
+        if dwpf < 55:
+            wvf = 0
+        elif 55 <= dwpf and dwpf <= 60:
+            wvf = vecsfc[1] / 2
+        else:
+            wvf = vecsfc[1]
+    elif 230 < vecsfc[0] and vecsfc[0] <= 250:
+        if dwpf < 55:
+            wvf = -2 * vecsfc[1]
+        elif 55 <= dwpf and dwpf <= 60:
+            wvf = -1 * vecsfc[1]
+        else:
+            wvf = vecsfc[1]
+    else:
+        wvf = -2 * vecsfc[1]
+    
+    sp = taf + tdf + asf + wvf
+    spot = round( sp , 0 )
+
+    return spot
 
 def thetae_diff(prof):
     '''
@@ -2983,4 +3078,137 @@ def thetae_diff(prof):
     else:
         return thetae_diff
 
+def thomp(prof):
+    '''
+        Thompson Index
 
+        The Thompson Index is a combination of the K Index and Lifted Index.
+        It attempts to integrate elevated moisture into the index, using the
+        850 mb dewpoint and 700 mb humidity.  Accordingly, it works best in
+        tropical and mountainous locations.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        thomp : number
+            Thompson Index (number)
+    '''
+
+    ki = getattr(prof, 'k_index', k_index(prof))
+    sbpcl = getattr(prof, 'sfpcl', parcelx(prof, flag=1))
+
+    thomp = ki - sbpcl.li5
+
+    return thomp
+
+def tq(prof):
+    '''
+        TQ Index
+
+        The TQ index is used for assessing the probability of low-topped
+        convection.  Values of more than 12 indicate an unstable lower
+        troposphere with thunderstorms possible outside of stratiform clouds.
+        Values of of more than 17 indicate an unstable lower troposphere
+        with thunderstorms possible when stratiform clouds are present.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        tq : number
+            TQ Index (number)
+    '''
+
+    tq = interp.temp(prof, 850) + interp.dwpt(prof, 850) - ( 1.7 * interp.temp(prof, 700) )
+
+    return tq
+
+def s_index(prof):
+    '''
+        S-Index
+
+        This European index is a mix of the K Index and Vertical Totals Index.
+        The S-Index was developed by the German Military Geophysical Office.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        s_index : number
+            S-Index (number)
+    '''
+
+    ki = getattr(prof, 'k_index', k_index(prof))
+    vt = getattr(prof, 'vertical_totals', v_totals(prof))
+    tmp5 = interp.temp(prof, 500)
+
+    if vt < 22:
+        af = 6
+    elif 22 <= vt and vt <= 25:
+        af = 2
+    else:
+        af = 0
+    
+    s_index = ki - ( tmp5 + af )
+
+    return s_index
+
+def boyden(prof):
+    '''
+        Boyden Index
+
+        This index, used in Europe, does not factor in moisture.
+        It evaluates thickness and mid-level warmth.  It was defined
+        in 1963 by C.J. Boyden.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        boyden : number
+            Boyden Index (number)
+    '''
+
+    # Height in decameters (dam)
+    h7 = interp.hght(prof, 700) / 10
+    h10 = interp.hght(prof, 1000) / 10
+    tmp7 = interp.temp(prof, 700)
+    
+    boyden = h7 - h10 - tmp7 - 200
+
+    return boyden
+
+def dci(prof):
+    '''
+        Deep Convective Index
+
+        This index is a combination of parcel theta-e at 850 mb and
+        Lifted Index.  This attempts to further improve the Lifted Index.
+        It was defined by W.R. Barlow in 1993.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        dci : number
+            Deep Convective Index (number)
+    '''
+
+    tmp85 = interp.temp(prof, 850)
+    dpt85 = interp.dwpt(prof, 850)
+    sbpcl = getattr(prof, 'sbpcl', parcelx(prof, flag=1))
+
+    dci = tmp85 + dpt85 - sbpcl.li5
+
+    return dci
