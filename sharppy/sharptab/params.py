@@ -14,7 +14,7 @@ __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'spot', 'hgz', 'lhp']
-__all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci']
+__all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'esi', 'vgp']
 
 class DefineParcel(object):
     '''
@@ -3124,7 +3124,11 @@ def tq(prof):
             TQ Index (number)
     '''
 
-    tq = interp.temp(prof, 850) + interp.dwpt(prof, 850) - ( 1.7 * interp.temp(prof, 700) )
+    t8 = interp.temp(prof, 850)
+    d8 = interp.dwpt(prof, 850)
+    t7 = interp.temp(prof, 700)
+    
+    tq = t8 + d8 - ( 1.7 * t7 )
 
     return tq
 
@@ -3166,7 +3170,7 @@ def boyden(prof):
 
         This index, used in Europe, does not factor in moisture.
         It evaluates thickness and mid-level warmth.  It was defined
-        in 1963 by C.J. Boyden.
+        in 1963 by C. J. Boyden.
 
         Parameters
         ----------
@@ -3193,7 +3197,7 @@ def dci(prof):
 
         This index is a combination of parcel theta-e at 850 mb and
         Lifted Index.  This attempts to further improve the Lifted Index.
-        It was defined by W.R. Barlow in 1993.
+        It was defined by W. R. Barlow in 1993.
 
         Parameters
         ----------
@@ -3212,3 +3216,196 @@ def dci(prof):
     dci = tmp85 + dpt85 - sbpcl.li5
 
     return dci
+
+def pii(prof):
+    '''
+        Potential Instability Index
+
+        This index relates potential instability in the middle
+        atmosphere with thickness.  It was proposed by A. J. Van
+        Delden in 2001.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        pii : number
+            Potential Instability Index (number)
+    '''
+
+    te7 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
+    te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    z5 = interp.hght(prof, 500)
+    z9 = interp.hght(prof, 925)
+
+    pii = ( te7 - te5 ) / ( z5 - z9 )
+
+    return pii
+
+def ko(prof):
+    '''
+        KO Index
+
+        This index was developed by Swedish meteorologists and used heavily
+        by the Deutsche Wetterdienst.  It compares values of equivalent potential
+        temperature at different levels.  It was developed by T. Andersson, M.
+        Andersson, C. Jacobsson, and S. Nilsson.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        ko : number
+            KO Index (number)
+    '''
+
+    te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    te7 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
+    te8 = thermo.thetae(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    te10 = thermo.thetae(1000, interp.temp(prof, 1000), interp.dwpt(prof, 1000))
+
+    ko = ( 0.5 * ( te5 + te7 ) ) - ( 0.5 * ( te8 + te10 ) )
+
+    return ko
+
+def brad(prof):
+    '''
+        Bradbury Index
+
+        Also known as the Potential Wet-Bulb Index, this index is used in Europe.
+        It is a measure of the potential instability between 850 and 500 mb.  It 
+        was defined in 1977 by T. A. M. Bradbury.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        brad : number
+            Bradbury Index (number)
+    '''
+
+    qw5 = thermo.thetaw(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    qw8 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+
+    brad = qw5 - qw8
+
+    return brad
+
+def rack(prof):
+    '''
+        Rackliff Index
+
+        This index, used primarily in Europe during the 1950s, is a simple comparison
+        of the 900 mb wet bulb temperature with the 500 mb dry bulb temperature.
+        It is believed to have been developed by Peter Rackliff during the 1940s.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        rack : number
+            Rackliff Index (number)
+    '''
+
+    qw9 = thermo.thetaw(900, interp.temp(prof, 900), interp.dwpt(prof, 900))
+    tmp5 = interp.temp(prof, 500)
+
+    rack = qw9 - tmp5
+
+    return rack
+
+def jeff(prof):
+    '''
+        Jefferson Index
+
+        A European stability index, the Jefferson Index was intended to be an improvement of the
+        Rackliff Index. The change would make it less dependent on temperature. The version used
+        since the 1960s is a slight modification of G. J. Jefferson's 1963 definition.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        jeff : number
+            Jefferson Index (number)
+    '''
+
+    qw8 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    tmp5 = interp.temp(prof, 500)
+    tmp7 = interp.temp(prof, 700)
+    tdp7 = interp.dwpt(prof, 700)
+
+    jeff = ( 1.6 * qw8 ) - tmp5 - ( 0.5 * (tmp7 - tdp7 ) ) - 8
+
+    return jeff
+
+def esi(prof, pcl):
+    '''
+        Energy Shear Index
+
+        This index, proposed as a way of parameterizing updraft duration, multiplies CAPE by
+        1.5-6 km MSL mean vertical shear magnitude in m/s.  A 2002 study by Brimelow and Reuter
+        indicated considerable success with using this index to forecast large hail.  An ESI
+        value approaching 5 is considered favorable for large hail, with values above 5 not
+        having much further significance.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        esi : number
+            Energy Shear Index (unitless)
+    '''
+
+    p15km, p6km = interp.pres(prof, np.array([1500., 6000.]))
+    msl_15_6km_shr = winds.wind_shear(prof, pbot=p15km, ptop=p6km)
+    msl_15_6km_shr = utils.mag(msl_15_6km_shr[0], msl_15_6km_shr[1])
+    shr156 = utils.KTS2MS(msl_15_6km_shr) / 1000
+
+    esi = shr156 * pcl.bplus
+
+    return esi
+
+def vgp(prof, pcl):
+    '''
+        Vorticity Generation Potential
+
+        The Vorticity Generation Potential index was developed by Erik Rasmussen and
+        David Blanchard in 1998.  It assesses the possibility for vorticity being
+        tilted into the vertical to create rotating updrafts.
+
+        The formula is:
+
+        VGP = sqrt(CAPE) * U03
+
+        where U03 is the mean shear between the surface and 3 km AGL.
+        
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        vgp : number
+            Vorticity Generation Potential (number)
+    '''
+
+    mag03_shr = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear)) / 1000
+
+    vgp = mag03_shr * ( sbpcl.bplus ** (1/2) )
+
+    return vgp
