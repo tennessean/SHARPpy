@@ -3235,12 +3235,12 @@ def pii(prof):
             Potential Instability Index (number)
     '''
 
-    te7 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
+    te9 = thermo.thetae(925, interp.temp(prof, 925), interp.dwpt(prof, 925))
     te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
     z5 = interp.hght(prof, 500)
     z9 = interp.hght(prof, 925)
 
-    pii = ( te7 - te5 ) / ( z5 - z9 )
+    pii = ( te9 - te5 ) / ( z5 - z9 )
 
     return pii
 
