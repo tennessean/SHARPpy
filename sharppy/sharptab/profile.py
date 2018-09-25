@@ -930,5 +930,3 @@ class ConvectiveProfile(BasicProfile):
         self.dcape, self.dpcl_ttrace, self.dpcl_ptrace = params.dcape(self)
         self.drush = thermo.ctof(self.dpcl_ttrace[-1])
         self.mburst = params.mburst(self)
-        self.sweat = params.sweat(self)
-        self.spot = params.spot(self)
