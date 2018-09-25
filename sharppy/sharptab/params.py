@@ -8,13 +8,14 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_advection']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_relh']
+__all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaw', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
-__all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'spot', 'hgz', 'lhp']
-__all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'esi', 'vgp']
+__all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
+__all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
+__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei']
 
 class DefineParcel(object):
     '''
@@ -1098,6 +1099,55 @@ def mean_theta(prof, pbot=None, ptop=None, dp=-1, exact=False):
         thta = ma.average(theta, weights=p)
     return thta
 
+def mean_thetaw(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Calculates the mean theta-w from a profile object within the
+        specified layer.
+        
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default 400 hPa)
+        Pressure of the top level (hPa)
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        Mean Theta-W
+        
+        '''
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.sfc] - 100.
+    if not utils.QC(interp.temp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.temp(prof, ptop)): return ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        thetaw1 = thermo.thetaw(pbot, interp.temp(prof, pbot), interp.dwpt(prof, pbot))
+        thetaw2 = thermo.thetaw(ptop, interp.temp(prof, ptop), interp.dwpt(prof, pbot))
+        thetaw = np.ma.empty(prof.pres[ind1:ind2+1].shape)
+        for i in np.arange(0, len(thetaw), 1):
+            thetaw[i] = thermo.thetaw(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i], prof.dwpc[ind1:ind2+1][i])
+        mask = ~thetaw.mask
+        thetaw = np.concatenate([[thetaw1], thetaw[mask], thetaw[mask], [thetaw2]])
+        tott = thetaw.sum() / 2.
+        num = float(len(thetaw)) / 2.
+        thtaw = tott / num
+    else:
+        dp = -1
+        p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
+        temp = interp.temp(prof, p)
+        dwpt = interp.dwpt(prof, p)
+        thetaw = thermo.thetaw(p, temp, dwpt)
+        thtaw = ma.average(thetaw, weights=p)
+    return thtaw
 
 def lapse_rate(prof, lower, upper, pres=True):
     '''
@@ -2890,7 +2940,8 @@ def ehi(prof, pcl, hbot, htop, stu=0, stv=0):
             Energy Helicity Index (unitless)
     '''
 
-    helicity = winds.helicity(prof, hbot, htop, stu=stu, stv=stv)[0]
+    srwind = bunkers_storm_motion(prof)
+    helicity = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
     ehi = (helicity * pcl.bplus) / 160000.
 
     return ehi
@@ -2948,102 +2999,6 @@ def sweat(prof):
 
     return sweat
 
-def spot(prof):
-    '''
-        SPOT Index
-
-        The Surface Potential (SPOT) Index, unlike most other forecasting indices,
-        uses only data collected from the surface level.  As such, it has the
-        advantage of being able to use surface plots, which usually update hourly
-        instead of every 12 to 24 hours as with upper-air observations.
-
-        Using the the SWEAT and SPOT values together tends to offer more skill
-        than using either index by itself.
-
-        The SPOT Index is computed using the following numbers:
-
-        1.) Surface ambient temperature (in degrees Fahrenheit)
-        2.) Surface dewpoint temperature (in degrees Fahrenheit)
-        3.) Altimeter setting (in inches of mercury (inHg))
-        4.) Wind direction
-        5.) Wind speed (in knots)
-
-        Parameters
-        ----------
-        prof : Profile object
-
-        Returns
-        -------
-        spot : number
-            SPOT Index (number)
-    '''
-
-    tmpc = prof.tmpc[prof.sfc]
-    dwpc = prof.dwpc[prof.sfc]
-    sfc_pres = prof.pres[prof.sfc]
-    sfc_hght = prof.hght[prof.sfc]
-    vecsfc = prof.vec[prof.sfc]
-
-    # Translate temperatures from Celsius to Fahrenheit
-    tmpf = thermo.ctof(tmpc)
-    dwpf = thermo.ctof(dwpc)
-
-    # Calculate altimeter setting
-    asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** ( 1 / 0.190163 )) * (( 0.0065 * sfc_hght ) / 288.15))) ** ( 0.190163 )) # Calculate altimeter setting in millibars
-    asi = asm * ( 514731 / 15200 ) # Translate altimeter setting from millibars to inHg
-
-    # Ambient temperature factor
-    taf = tmpf - 60
-
-    # Dewpoint temperature factor
-    tdf = dwpf - 55
-
-    # Altimeter setting factor
-    if tmpf < 50 and asi < 29.50:
-        asf = 50 * ( 30 - asi )
-    else:
-        asf = 100 * ( 30 - asi )
-    
-    # Wind vector factor
-    if 0 <= vecsfc[0] and vecsfc[0] < 40:
-        if dwpf < 55:
-            wvf = -2 * vecsfc[1]
-        else:
-            wvf = -1 * vecsfc[1]
-    elif 40 <= vecsfc[0] and vecsfc[0] < 70:
-        wvf = 0
-    elif 70 <= vecsfc[0] and vecsfc[0] < 130:
-        if dwpf < 55:
-            wvf = vecsfc[1] / 2
-        else:
-            wvf = vecsfc[1]
-    elif 130 <= vecsfc[0] and vecsfc[0] <= 210:
-        if dwpc < 55:
-            wvf = vecsfc[1]
-        else:
-            wvf = 2 * vecsfc[1]
-    elif 210 < vecsfc[0] and vecsfc[0] <= 230:
-        if dwpf < 55:
-            wvf = 0
-        elif 55 <= dwpf and dwpf <= 60:
-            wvf = vecsfc[1] / 2
-        else:
-            wvf = vecsfc[1]
-    elif 230 < vecsfc[0] and vecsfc[0] <= 250:
-        if dwpf < 55:
-            wvf = -2 * vecsfc[1]
-        elif 55 <= dwpf and dwpf <= 60:
-            wvf = -1 * vecsfc[1]
-        else:
-            wvf = vecsfc[1]
-    else:
-        wvf = -2 * vecsfc[1]
-    
-    sp = taf + tdf + asf + wvf
-    spot = round( sp , 0 )
-
-    return spot
-
 def thetae_diff(prof):
     '''
         thetae_diff()
@@ -3078,6 +3033,102 @@ def thetae_diff(prof):
     else:
         return thetae_diff
 
+def spot(prof):
+    '''
+        SPOT Index
+
+        The Surface Potential (SPOT) Index, unlike most other forecasting indices,
+        uses only data collected from the surface level.  As such, it has the
+        advantage of being able to use surface plots, which usually update hourly
+        instead of every 12 to 24 hours as with upper-air observations.
+
+        Using the the SWEAT and SPOT values together tends to offer more skill
+        than using either index by itself.
+
+        The SPOT Index is computed using the following numbers:
+
+        1.) Surface ambient temperature (in degrees Fahrenheit)
+        2.) Surface dewpoint temperature (in degrees Fahrenheit)
+        3.) Altimeter setting (in inches of mercury (inHg))
+        4.) Wind direction
+        5.) Wind speed (in knots)
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        spot : number
+            SPOT Index (number)
+    '''
+
+    tmpc = prof.tmpc[prof.sfc]
+    dwpc = prof.dwpc[prof.sfc]
+    sfc_pres = prof.pres[prof.sfc]
+    sfc_hght = prof.hght[prof.sfc]
+    wdirsfc = prof.wdir[prof.sfc]
+    wspdsfc = prof.wspd[prof.sfc]
+
+    # Translate temperatures from Celsius to Fahrenheit
+    tmpf = thermo.ctof(tmpc)
+    dwpf = thermo.ctof(dwpc)
+
+    # Calculate altimeter setting
+    asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** 0.190163 ) * (( 0.0065 * sfc_hght ) / 288.15))) ** ( 1 / 0.190163 )) # Calculate altimeter setting in mb
+    asi = asm * 15200/514731 # Translate altimeter setting from mb to inHg
+
+    # Ambient temperature factor
+    taf = tmpf - 60
+
+    # Dewpoint temperature factor
+    tdf = dwpf - 55
+
+    # Altimeter setting factor
+    if tmpf < 50 and asi < 29.50:
+        asf = 50 * ( 30 - asi )
+    else:
+        asf = 100 * ( 30 - asi )
+    
+    # Wind vector factor
+    if 0 <= wdirsfc and wdirsfc < 40:
+        if dwpf < 55:
+            wvf = -2 * wspdsfc
+        else:
+            wvf = -1 * wspdsfc
+    elif 40 <= wdirsfc and wdirsfc < 70:
+        wvf = 0
+    elif 70 <= wdirsfc and wdirsfc < 130:
+        if dwpf < 55:
+            wvf = wspdsfc / 2
+        else:
+            wvf = wspdsfc
+    elif 130 <= wdirsfc and wdirsfc <= 210:
+        if dwpf < 55:
+            wvf = wspdsfc
+        else:
+            wvf = 2 * wspdsfc
+    elif 210 < wdirsfc and wdirsfc <= 230:
+        if dwpf < 55:
+            wvf = 0
+        elif 55 <= dwpf and dwpf <= 60:
+            wvf = wspdsfc / 2
+        else:
+            wvf = wspdsfc
+    elif 230 < wdirsfc and wdirsfc <= 250:
+        if dwpf < 55:
+            wvf = -2 * wspdsfc
+        elif 55 <= dwpf and dwpf <= 60:
+            wvf = -1 * wspdsfc
+        else:
+            wvf = wspdsfc
+    else:
+        wvf = -2 * wspdsfc
+    
+    spot = taf + tdf + asf + wvf
+
+    return spot
+
 def thomp(prof):
     '''
         Thompson Index
@@ -3098,9 +3149,8 @@ def thomp(prof):
     '''
 
     ki = getattr(prof, 'k_index', k_index(prof))
-    sbpcl = getattr(prof, 'sfpcl', parcelx(prof, flag=1))
 
-    thomp = ki - sbpcl.li5
+    thomp = ki - pcl.li5
 
     return thomp
 
@@ -3211,9 +3261,8 @@ def dci(prof):
 
     tmp85 = interp.temp(prof, 850)
     dpt85 = interp.dwpt(prof, 850)
-    sbpcl = getattr(prof, 'sbpcl', parcelx(prof, flag=1))
 
-    dci = tmp85 + dpt85 - sbpcl.li5
+    dci = tmp85 + dpt85 - pcl.li5
 
     return dci
 
@@ -3221,9 +3270,10 @@ def pii(prof):
     '''
         Potential Instability Index
 
-        This index relates potential instability in the middle
-        atmosphere with thickness.  It was proposed by A. J. Van
-        Delden in 2001.
+        This index relates potential instability in the middle atmosphere with
+        thickness.  It was proposed by A. J. Van Delden in 2001.  Positive values
+        indicate increased potential for convective weather.  The units are in
+        degrees Kelvin per meter (K/m).
 
         Parameters
         ----------
@@ -3404,8 +3454,114 @@ def vgp(prof, pcl):
             Vorticity Generation Potential (number)
     '''
 
-    mag03_shr = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear)) / 1000
+    mag03_shr = utils.mag(*prof.sfc_3km_shear) / 1000
 
-    vgp = mag03_shr * ( sbpcl.bplus ** (1/2) )
+    vgp = mag03_shr * ( pcl.bplus ** (1/2) )
 
     return vgp
+
+def aded1(prof)
+    '''
+        Adedokun Index, version 1
+
+        The Adedokun Index (created by J.A. Adedokun in 1981 and 1982) was developed
+        in two versions for forecasting precipitation in west Africa.  The Index 
+        lowers a 500 mb parcel moist adiabatically to 1000 mb, then compares it to
+        the wet bulb potential temperature (theta-w) of a specified level.
+
+        Version 1 subtracts the parcel's temperature from the theta-w of the 850 mb
+        level.  This version has been found to be better for forecasting non-
+        occurrence of precipitation.
+	
+	For both versions, values >= -1 were defined to be indicative of precipitation
+        occurrence while values < -1 were defined to be indicative of precipitation
+        non-occurrence.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        aded1 : number
+            Adedokun Index, version 1 (number)
+    '''
+
+    pclm5 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    thtw85 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+
+    aded1 = thtw85 - pclm5
+
+    return aded1
+
+def aded2(prof)
+    '''
+        Adedokun Index, version 2
+
+        The Adedokun Index (created by J.A. Adedokun in 1981 and 1982) was developed
+        in two versions for forecasting precipitation in west Africa.  The Index 
+        lowers a 500 mb parcel moist adiabatically to 1000 mb, then compares it to
+        the wet bulb potential temperature (theta-w) of a specified level.
+
+        Version 2 subtracts the parcel's temperature from the theta-w of the surface
+        level.  This version has been found to be better for forecasting occurrence
+        of precipitation.
+	
+	For both versions, values >= -1 were defined to be indicative of precipitation
+        occurrence while values < -1 were defined to be indicative of precipitation
+        non-occurrence.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        aded1 : number
+            Adedokun Index, version 2 (number)
+    '''
+
+    pclm5 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    thtw_sfc = thermo.thetaw(prof.pres[prof.sfc], prof.temp[prof.sfc], prof.dwpt[prof.sfc])
+
+    aded2 = thtw_sfc - pclm5
+
+    return aded2
+
+def ei(prof)
+    '''
+        Energy Index
+
+        The Energy Index (also known as the Total Energy Index) was developed by G. L.
+        Darkow in 1968.  It calculates the moist static energy at the 500 and 850 mb levels
+        and then subtracts the latter from the former.  The energy is calculated in units
+        of cal/gm.  Negative values indicate instability.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        ei : number
+            Energy Index (number)
+    '''
+
+    tmp500 = thermo.ctok(interp.temp(prof, 500)) # Temperature in degrees Kelvin
+    hght500 = interp.hght(prof, 500)
+    mxr500 = thermo.mixratio(500, interp.dwpt(prof,500))
+    tmp850 = thermo.ctok(interp.temp(prof, 850)) # Temperature in degrees Kelvin
+    hght850 = interp.hght(prof, 850)
+    mxr850 = thermo.mixratio(850, interp.dwpt(prof, 500))
+
+    # Calculate moist static energy in joules/kilogram
+    mse5_j = ( 1004 * tmp500 ) + ( G * hght500 ) + ( 2500000 * mxr500 )
+    mse8_j = ( 1004 * tmp850 ) + ( G * hght850 ) + ( 2500000 * mxr850 )
+
+    # Convert moist static energy to calories/gram
+    mse5_c = mse5_j / 4186.8
+    mse8_c = mse8_j / 4186.8
+
+    ei = mse5_c - mse8_c
+
+    return ei
