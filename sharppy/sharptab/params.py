@@ -3460,7 +3460,7 @@ def vgp(prof, pcl):
 
     return vgp
 
-def aded1(prof)
+def aded1(prof):
     '''
         Adedokun Index, version 1
 
@@ -3494,7 +3494,7 @@ def aded1(prof)
 
     return aded1
 
-def aded2(prof)
+def aded2(prof):
     '''
         Adedokun Index, version 2
 
@@ -3528,7 +3528,7 @@ def aded2(prof)
 
     return aded2
 
-def ei(prof)
+def ei(prof):
     '''
         Energy Index
 
