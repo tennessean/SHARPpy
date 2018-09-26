@@ -6,7 +6,7 @@ from sharppy.sharptab import interp, utils, thermo, winds
 from sharppy.sharptab.constants import *
 
 
-__all__ = ['DefineParcel', 'Parcel', 'inferred_temp_advection']
+__all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
 __all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaw', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
@@ -15,7 +15,7 @@ __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_sev
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
-__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei']
+__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq']
 
 class DefineParcel(object):
     '''
@@ -223,6 +223,7 @@ class Parcel(object):
         self.bminus = ma.masked # Parcel CIN (J/kg)
         self.bfzl = ma.masked # Parcel CAPE up to freezing level (J/kg)
         self.b3km = ma.masked # Parcel CAPE up to 3 km (J/kg)
+	self.b4km = ma.masked # Parcel CAPE up to 4 km (J/kg)
         self.b6km = ma.masked # Parcel CAPE up to 6 km (J/kg)
         self.p0c = ma.masked # Pressure value at 0 C  (mb)
         self.pm10c = ma.masked # Pressure value at -10 C (mb)
@@ -1844,7 +1845,7 @@ def parcelx(prof, pbot=None, ptop=None, dp=-1, **kwargs):
         
         # Is this the 3km level
         if pcl.lclhght < 3000.:
-            if interp.to_agl(prof, h1) <=3000. and interp.to_agl(prof, h2) >= 3000. and not utils.QC(pcl.b3km):
+            if interp.to_agl(prof, h1) <= 3000. and interp.to_agl(prof, h2) >= 3000. and not utils.QC(pcl.b3km):
                 pe3 = pelast
                 h3 = interp.hght(prof, pe3)
                 te3 = interp.vtmp(prof, pe3)
@@ -1865,9 +1866,32 @@ def parcelx(prof, pbot=None, ptop=None, dp=-1, **kwargs):
                     if lyrf > 0: pcl.b3km += lyrf
         else: pcl.b3km = 0.
         
+	# Is this the 4km level
+        if pcl.lclhght < 4000.:
+            if interp.to_agl(prof, h1) <= 4000. and interp.to_agl(prof, h2) >= 4000. and not utils.QC(pcl.b4km):
+                pe3 = pelast
+                h3 = interp.hght(prof, pe3)
+                te3 = interp.vtmp(prof, pe3)
+                tp3 = thermo.wetlift(pe1, tp1, pe3)
+                lyrf = lyre
+                if lyrf > 0: pcl.b4km = totp - lyrf
+                else: pcl.b4km = totp
+                h4 = interp.to_msl(prof, 4000.)
+                pe4 = interp.pres(prof, h4)
+                if utils.QC(pe2):
+                    te2 = interp.vtmp(prof, pe4)
+                    tp2 = thermo.wetlift(pe3, tp3, pe4)
+                    tdef3 = (thermo.virtemp(pe3, tp3, tp3) - te3) / \
+                        thermo.ctok(te3)
+                    tdef2 = (thermo.virtemp(pe4, tp2, tp2) - te2) / \
+                        thermo.ctok(te2)
+                    lyrf = G * (tdef3 + tdef2) / 2. * (h4 - h3)
+                    if lyrf > 0: pcl.b4km += lyrf
+        else: pcl.b4km = 0.
+	
         # Is this the 6km level
         if pcl.lclhght < 6000.:
-            if interp.to_agl(prof, h1) <=6000. and interp.to_agl(prof, h2) >= 6000. and not utils.QC(pcl.b6km):
+            if interp.to_agl(prof, h1) <= 6000. and interp.to_agl(prof, h2) >= 6000. and not utils.QC(pcl.b6km):
                 pe3 = pelast
                 h3 = interp.hght(prof, pe3)
                 te3 = interp.vtmp(prof, pe3)
@@ -3565,3 +3589,193 @@ def ei(prof):
     ei = mse5_c - mse8_c
 
     return ei
+
+def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6):
+    '''
+        Enhanced Energy Helicity Index
+
+        The original 0-1 km EHI presented a normalized product of 0-1 km storm-relative helicity
+        (SRH) and 100 mb mean parcel (ML) CAPE. This modified version more closely mimics the
+        fixed-layer significant tornado parameter with its inclusion of the same fixed-layer (0-6 km)
+        bulk wind difference term (SHR6), and the addition of a 4 km AGL max vertical velocity term (WMAX4).
+
+        If surface-based (SB) CAPE exceeds the MLCAPE, the ML lifting condensation level (LCL) in less than
+        1000 m AGL, and the surface temperature - dewpoint depression is no more than 10 F, then the SB
+        parcel is used in the EEHI calculation. Otherwise, the calculation defaults to the ML parcel.
+
+        The index is formulated as follows:
+
+        EEHI = ((CAPE * 0-1 km SRH)/ 160000) * SRH6 * WMAX4
+
+        The 0-6 km bulk wind difference term is capped at a value of 1.5 for SRH6 greater than 30 m/s,
+        (SHR6 / 20 m/s) for values from 12.5-30 m/s, and set to 0.0 when SHR6 is less than 12.5 m/s.
+        The WMAX4 term is capped at 1.5 for WMAX4 greater than 30 m/s, (WMAX4 / 20 m/s) for values
+        from 10-30 m/s, and set to 0.0 when WMAX4 is less than 10 m/s. Lastly, the entire index is
+        set to 0.0 if the average of the SBLCL and MLLCL is greater than 2000 m AGL.
+
+        This enhanced EHI is meant to highlight tornadic supercell potential into a lower range of buoyancy,
+        compared to the fixed-layer significant tornado parameter, with decreased false alarms compared to
+        the original 0-1 km EHI. The WMAX4 term reflects the thermodynamic potential for low-level vortex
+        stretching, while the SB parcel is used for CAPE calculations in relatively moist environments more
+        typical of the cool season or tropical cyclones. Values greater than 1 are associated with greater
+        probabilities of tornadic supercells.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        sbcape : Surface based CAPE from the parcel class (J/kg)
+        sblcl : Surface based lifted condensation level (m)
+        mllcl : Mixed-layer lifted condensation level (m)
+        bwd6 : Bulk wind difference between 0 to 6 km (m/s)
+
+        Returns
+        -------
+        eehi : number
+            Enhanced Energy Helicity Index (unitless)
+    '''
+
+    tmpsfc = thermo.ctof(prof.tmpc[prof.sfc])
+    dptsfc = thermo.ctof(prof.dwpc[prof.sfc])
+    sbcape = prof.sbpcl.bplus
+    mlcape = prof.mlpcl.bplus
+
+    if sbcape > mlcape and mllcl < 1000 and tmpsfc - dptsfc <= 10:
+        capef = sbcape
+        cape4 = prof.sbpcl.b4km
+    else:
+        capef = mlcape
+        cape4 = prof.mlpcl.b4km
+    
+    wmax4 = 2 * ( cape4 ** 0.5 )
+
+    if bwd6 > 30:
+        srh6f = 1.5
+    elif bwd6 < 12.5:
+        srh6f = 0
+    else:
+        srh6f = bwd6 / 20
+    
+    if wmax4 > 30:
+        wmax4f = 1.5
+    elif wmax4 < 10:
+        wmax4f = 0
+    else:
+        wmax4f = wmax4 / 20
+    
+    if ( sblcl + mllcl ) / 2 < 2000:
+        eehi = 0
+    else:
+        eehi = (( capef * srh01 ) / 160000 ) * srh6f * wmax4f
+    
+    return eehi
+
+def vtp(prof, pcl, mlcape, esrh, ebwd, mllcl, mlcinh):
+    '''
+        Violent Tornado Parameter
+
+        From Hampshire et. al. 2017, JOM page 8.
+
+        Research using observed soundings found that 0-3 km CAPE and 0-3 km lapse rate were notable
+        discriminators of violent tornado environments (verses weak and/or significant tornado environments).
+        These parameters were combined into the effective layer version of the Significant Tornado Parameter
+        (STP) to create the Violent Tornado Parameter (VTP).
+
+        Parameters
+        ----------
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        esrh : effective storm relative helicity (m2/s2)
+        ebwd : effective bulk wind difference (m/s)
+        mllcl : mixed-layer lifted condensation level (m)
+        mlcinh : mixed-layer convective inhibition (J/kg)
+
+        Returns
+        -------
+        vtp : number
+            Violent Tornado Parameter (unitless)
+    '''
+
+    cape_term = mlcape / 1500.
+    eshr_term = esrh / 150.
+    lr03_term = lapse_rate(prof, 0, 3000, pres=False) / 6.5
+    
+    if ebwd < 12.5:
+        ebwd_term = 0.
+    elif ebwd > 30.:
+        ebwd_term = 1.5
+    else:
+        ebwd_term  = ebwd / 20.
+
+    if mllcl < 1000.:
+        lcl_term = 1.0
+    elif mllcl > 2000.:
+        lcl_term = 0.0
+    else:
+        lcl_term = ((2000. - mllcl) / 1000.)
+
+    if mlcinh > -50:
+        cinh_term = 1.0
+    elif mlcinh < -200:
+        cinh_term = 0
+    else:
+        cinh_term = ((mlcinh + 200.) / 150.)
+    
+    if prof.mlpcl.b3km > 100:
+        cape3_term = 2
+    else:
+        cape3_term = prof.mlpcl.b3km / 50
+
+    vtp = np.maximum(cape_term * eshr_term * ebwd_term * lcl_term * cinh_term * cape3_term * lr03_term, 0)
+    return vtp
+
+def snsq(prof):
+    '''
+        Snow Squall Parameter
+
+        From Banacos et. al. 2014, JOM page 142.
+
+        A non-dimensional composite parameter that combines 0-2 km AGL relative humidity, 0-2 km AGL
+        potential instability (theta-e decreases with height), and 0-2 km AGL mean wind speed (m/s).
+        The intent of the parameter is to identify areas with low-level potential instability, sufficient
+        moisture, and strong winds to support snow squall development. Surface potential temperatures
+        (theta) and MSL pressure are also plotted to identify strong baroclinic zones which often
+        provide the focused low-level ascent in cases of narrow snow bands.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        snsq : number
+            Snow Squall Parameter (unitless)
+    '''
+
+    sfc_pres = prof.pres[prof.sfc]
+    pres_2km = interp.pres(prof, interp.to_msl(prof, 2000))
+    relh02 = mean_relh(prof, pbot=sfc_pres, ptop=pres_2km)
+    sfc_thetae = prof.thetae[prof.sfc]
+    thetae_2km = interp.thetae(prof, pres_2km)
+    thetae_d02 = thetae_2km - sfc_thetae
+    mw02 = utils.KTS2MS(utils.mag(*winds.mean_wind_npw(prof, pbot=sfc_pres, ptop=pres_2km)))
+    sfc_wtb = prof.wetbulb[prof.sfc]
+
+    if relh02 < 60:
+        relhf = 0
+    else:
+        relhf = ( relh02 - 60 ) / 15
+    
+    if thetae_d02 > 4:
+        thetaef = 0
+    else:
+        thetaef = ( 4 - thetae_d02 ) / 4
+    
+    mwf = mw02 / 9
+
+    if sfc_wtb >= 1:
+        snsq = 0
+    else:
+        snsq = relhf * thetaef * mwf
+    
+    return snsq
