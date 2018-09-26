@@ -6,15 +6,16 @@ from sharppy.sharptab import interp, utils, thermo, winds
 from sharppy.sharptab.constants import *
 
 
-__all__ = ['DefineParcel', 'Parcel', 'inferred_temp_advection']
+__all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_relh']
+__all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaw', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
-
+__all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
+__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq']
 
 class DefineParcel(object):
     '''
@@ -222,6 +223,7 @@ class Parcel(object):
         self.bminus = ma.masked # Parcel CIN (J/kg)
         self.bfzl = ma.masked # Parcel CAPE up to freezing level (J/kg)
         self.b3km = ma.masked # Parcel CAPE up to 3 km (J/kg)
+        self.b4km = ma.masked # Parcel CAPE up to 4 km (J/kg)
         self.b6km = ma.masked # Parcel CAPE up to 6 km (J/kg)
         self.p0c = ma.masked # Pressure value at 0 C  (mb)
         self.pm10c = ma.masked # Pressure value at -10 C (mb)
@@ -1098,6 +1100,55 @@ def mean_theta(prof, pbot=None, ptop=None, dp=-1, exact=False):
         thta = ma.average(theta, weights=p)
     return thta
 
+def mean_thetaw(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Calculates the mean theta-w from a profile object within the
+        specified layer.
+        
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default 400 hPa)
+        Pressure of the top level (hPa)
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        Mean Theta-W
+        
+        '''
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.sfc] - 100.
+    if not utils.QC(interp.temp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.temp(prof, ptop)): return ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        thetaw1 = thermo.thetaw(pbot, interp.temp(prof, pbot), interp.dwpt(prof, pbot))
+        thetaw2 = thermo.thetaw(ptop, interp.temp(prof, ptop), interp.dwpt(prof, pbot))
+        thetaw = np.ma.empty(prof.pres[ind1:ind2+1].shape)
+        for i in np.arange(0, len(thetaw), 1):
+            thetaw[i] = thermo.thetaw(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i], prof.dwpc[ind1:ind2+1][i])
+        mask = ~thetaw.mask
+        thetaw = np.concatenate([[thetaw1], thetaw[mask], thetaw[mask], [thetaw2]])
+        tott = thetaw.sum() / 2.
+        num = float(len(thetaw)) / 2.
+        thtaw = tott / num
+    else:
+        dp = -1
+        p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
+        temp = interp.temp(prof, p)
+        dwpt = interp.dwpt(prof, p)
+        thetaw = thermo.thetaw(p, temp, dwpt)
+        thtaw = ma.average(thetaw, weights=p)
+    return thtaw
 
 def lapse_rate(prof, lower, upper, pres=True):
     '''
@@ -1794,7 +1845,7 @@ def parcelx(prof, pbot=None, ptop=None, dp=-1, **kwargs):
         
         # Is this the 3km level
         if pcl.lclhght < 3000.:
-            if interp.to_agl(prof, h1) <=3000. and interp.to_agl(prof, h2) >= 3000. and not utils.QC(pcl.b3km):
+            if interp.to_agl(prof, h1) <= 3000. and interp.to_agl(prof, h2) >= 3000. and not utils.QC(pcl.b3km):
                 pe3 = pelast
                 h3 = interp.hght(prof, pe3)
                 te3 = interp.vtmp(prof, pe3)
@@ -1815,9 +1866,32 @@ def parcelx(prof, pbot=None, ptop=None, dp=-1, **kwargs):
                     if lyrf > 0: pcl.b3km += lyrf
         else: pcl.b3km = 0.
         
+        # Is this the 4km level
+        if pcl.lclhght < 4000.:
+            if interp.to_agl(prof, h1) <= 4000. and interp.to_agl(prof, h2) >= 4000. and not utils.QC(pcl.b4km):
+                pe3 = pelast
+                h3 = interp.hght(prof, pe3)
+                te3 = interp.vtmp(prof, pe3)
+                tp3 = thermo.wetlift(pe1, tp1, pe3)
+                lyrf = lyre
+                if lyrf > 0: pcl.b4km = totp - lyrf
+                else: pcl.b4km = totp
+                h4 = interp.to_msl(prof, 4000.)
+                pe4 = interp.pres(prof, h4)
+                if utils.QC(pe2):
+                    te2 = interp.vtmp(prof, pe4)
+                    tp2 = thermo.wetlift(pe3, tp3, pe4)
+                    tdef3 = (thermo.virtemp(pe3, tp3, tp3) - te3) / \
+                        thermo.ctok(te3)
+                    tdef2 = (thermo.virtemp(pe4, tp2, tp2) - te2) / \
+                        thermo.ctok(te2)
+                    lyrf = G * (tdef3 + tdef2) / 2. * (h4 - h3)
+                    if lyrf > 0: pcl.b4km += lyrf
+        else: pcl.b4km = 0.
+
         # Is this the 6km level
         if pcl.lclhght < 6000.:
-            if interp.to_agl(prof, h1) <=6000. and interp.to_agl(prof, h2) >= 6000. and not utils.QC(pcl.b6km):
+            if interp.to_agl(prof, h1) <= 6000. and interp.to_agl(prof, h2) >= 6000. and not utils.QC(pcl.b6km):
                 pe3 = pelast
                 h3 = interp.hght(prof, pe3)
                 te3 = interp.vtmp(prof, pe3)
@@ -2305,7 +2379,7 @@ def sherb(prof, **kwargs):
     if effective == False:
         p3km = interp.pres(prof, interp.to_msl(prof, 3000))
         sfc_pres = prof.pres[prof.get_sfc()]
-        shear = utils.KTS2MS(winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km))
+        shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
         sherb = ( shear / 26. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
     else:
         if hasattr(prof, 'ebwd'):
@@ -2317,7 +2391,7 @@ def sherb(prof, **kwargs):
             # if the effective inflow layer hasn't been specified via the function arguments
             # or doesn't exist in the Profile object we need to calculate it, but we need mupcl
             if ebottom is None or etop is None:
-                #only calculate ebottom and etop if they're not supplied by the kwargs
+                # only calculate ebottom and etop if they're not supplied by the kwargs
                 if not hasattr(prof, 'mupcl') or not kwargs.get('mupcl', None):
                     # If the mupcl attribute doesn't exist in the Profile
                     # or the mupcl hasn't been passed as an argument
@@ -2742,9 +2816,9 @@ def mburst(prof):
         5-8 infers a "chance" of a microburst; >= 9 infers that microbursts are "likely".
         These values can also be viewed as conditional upon the existence of a storm.
 	
-	This code was updated on 9/11/2018 - TT was being used in the function instead of VT.
-	The original SPC code was checked to confirm this was the problem.
-	This error was not identified during the testing phase for some reason.
+	    This code was updated on 9/11/2018 - TT was being used in the function instead of VT.
+    	The original SPC code was checked to confirm this was the problem.
+	    This error was not identified during the testing phase for some reason.
 
         Parameters
         ----------
@@ -2890,7 +2964,8 @@ def ehi(prof, pcl, hbot, htop, stu=0, stv=0):
             Energy Helicity Index (unitless)
     '''
 
-    helicity = winds.helicity(prof, hbot, htop, stu=stu, stv=stv)[0]
+    srwind = bunkers_storm_motion(prof)
+    helicity = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
     ehi = (helicity * pcl.bplus) / 160000.
 
     return ehi
@@ -2908,9 +2983,9 @@ def sweat(prof):
         5.) Direction of wind at 500
         6.) Direction of wind at 850
 	
-	Formulation taken from 
-	Notes on Analysis and Severe-Storm Forecasting Procedures of the Air Force Global Weather Central, 1972
-	by RC Miller.
+	    Formulation taken from 
+	    Notes on Analysis and Severe-Storm Forecasting Procedures of the Air Force Global Weather Central, 1972
+	    by RC Miller.
 
         Parameters
         ----------
@@ -2948,7 +3023,6 @@ def sweat(prof):
 
     return sweat
 
-
 def thetae_diff(prof):
     '''
         thetae_diff()
@@ -2983,4 +3057,725 @@ def thetae_diff(prof):
     else:
         return thetae_diff
 
+def spot(prof):
+    '''
+        SPOT Index
 
+        The Surface Potential (SPOT) Index, unlike most other forecasting indices,
+        uses only data collected from the surface level.  As such, it has the
+        advantage of being able to use surface plots, which usually update hourly
+        instead of every 12 to 24 hours as with upper-air observations.
+
+        Using the the SWEAT and SPOT values together tends to offer more skill
+        than using either index by itself.
+
+        The SPOT Index is computed using the following numbers:
+
+        1.) Surface ambient temperature (in degrees Fahrenheit)
+        2.) Surface dewpoint temperature (in degrees Fahrenheit)
+        3.) Altimeter setting (in inches of mercury (inHg))
+        4.) Wind direction
+        5.) Wind speed (in knots)
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        spot : number
+            SPOT Index (number)
+    '''
+
+    tmpc = prof.tmpc[prof.sfc]
+    dwpc = prof.dwpc[prof.sfc]
+    sfc_pres = prof.pres[prof.sfc]
+    sfc_hght = prof.hght[prof.sfc]
+    wdirsfc = prof.wdir[prof.sfc]
+    wspdsfc = prof.wspd[prof.sfc]
+
+    # Translate temperatures from Celsius to Fahrenheit
+    tmpf = thermo.ctof(tmpc)
+    dwpf = thermo.ctof(dwpc)
+
+    # Calculate altimeter setting
+    asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** 0.190163 ) * (( 0.0065 * sfc_hght ) / 288.15))) ** ( 1 / 0.190163 )) # Calculate altimeter setting in mb
+    asi = asm * 15200/514731 # Translate altimeter setting from mb to inHg
+
+    # Ambient temperature factor
+    taf = tmpf - 60
+
+    # Dewpoint temperature factor
+    tdf = dwpf - 55
+
+    # Altimeter setting factor
+    if tmpf < 50 and asi < 29.50:
+        asf = 50 * ( 30 - asi )
+    else:
+        asf = 100 * ( 30 - asi )
+    
+    # Wind vector factor
+    if 0 <= wdirsfc and wdirsfc < 40:
+        if dwpf < 55:
+            wvf = -2 * wspdsfc
+        else:
+            wvf = -1 * wspdsfc
+    elif 40 <= wdirsfc and wdirsfc < 70:
+        wvf = 0
+    elif 70 <= wdirsfc and wdirsfc < 130:
+        if dwpf < 55:
+            wvf = wspdsfc / 2
+        else:
+            wvf = wspdsfc
+    elif 130 <= wdirsfc and wdirsfc <= 210:
+        if dwpf < 55:
+            wvf = wspdsfc
+        else:
+            wvf = 2 * wspdsfc
+    elif 210 < wdirsfc and wdirsfc <= 230:
+        if dwpf < 55:
+            wvf = 0
+        elif 55 <= dwpf and dwpf <= 60:
+            wvf = wspdsfc / 2
+        else:
+            wvf = wspdsfc
+    elif 230 < wdirsfc and wdirsfc <= 250:
+        if dwpf < 55:
+            wvf = -2 * wspdsfc
+        elif 55 <= dwpf and dwpf <= 60:
+            wvf = -1 * wspdsfc
+        else:
+            wvf = wspdsfc
+    else:
+        wvf = -2 * wspdsfc
+    
+    spot = taf + tdf + asf + wvf
+
+    return spot
+
+def thomp(prof, pcl):
+    '''
+        Thompson Index
+
+        The Thompson Index is a combination of the K Index and Lifted Index.
+        It attempts to integrate elevated moisture into the index, using the
+        850 mb dewpoint and 700 mb humidity.  Accordingly, it works best in
+        tropical and mountainous locations.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        thomp : number
+            Thompson Index (number)
+    '''
+
+    ki = getattr(prof, 'k_index', k_index(prof))
+
+    thomp = ki - pcl.li5
+
+    return thomp
+
+def tq(prof):
+    '''
+        TQ Index
+
+        The TQ index is used for assessing the probability of low-topped
+        convection.  Values of more than 12 indicate an unstable lower
+        troposphere with thunderstorms possible outside of stratiform clouds.
+        Values of of more than 17 indicate an unstable lower troposphere
+        with thunderstorms possible when stratiform clouds are present.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        tq : number
+            TQ Index (number)
+    '''
+
+    t8 = interp.temp(prof, 850)
+    d8 = interp.dwpt(prof, 850)
+    t7 = interp.temp(prof, 700)
+    
+    tq = t8 + d8 - ( 1.7 * t7 )
+
+    return tq
+
+def s_index(prof):
+    '''
+        S-Index
+
+        This European index is a mix of the K Index and Vertical Totals Index.
+        The S-Index was developed by the German Military Geophysical Office.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        s_index : number
+            S-Index (number)
+    '''
+
+    ki = getattr(prof, 'k_index', k_index(prof))
+    vt = getattr(prof, 'vertical_totals', v_totals(prof))
+    tmp5 = interp.temp(prof, 500)
+
+    if vt < 22:
+        af = 6
+    elif 22 <= vt and vt <= 25:
+        af = 2
+    else:
+        af = 0
+    
+    s_index = ki - ( tmp5 + af )
+
+    return s_index
+
+def boyden(prof):
+    '''
+        Boyden Index
+
+        This index, used in Europe, does not factor in moisture.
+        It evaluates thickness and mid-level warmth.  It was defined
+        in 1963 by C. J. Boyden.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        boyden : number
+            Boyden Index (number)
+    '''
+
+    # Height in decameters (dam)
+    h7 = interp.hght(prof, 700) / 10
+    h10 = interp.hght(prof, 1000) / 10
+    tmp7 = interp.temp(prof, 700)
+    
+    boyden = h7 - h10 - tmp7 - 200
+
+    return boyden
+
+def dci(prof, pcl):
+    '''
+        Deep Convective Index
+
+        This index is a combination of parcel theta-e at 850 mb and
+        Lifted Index.  This attempts to further improve the Lifted Index.
+        It was defined by W. R. Barlow in 1993.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        dci : number
+            Deep Convective Index (number)
+    '''
+
+    tmp85 = interp.temp(prof, 850)
+    dpt85 = interp.dwpt(prof, 850)
+
+    dci = tmp85 + dpt85 - pcl.li5
+
+    return dci
+
+def pii(prof):
+    '''
+        Potential Instability Index
+
+        This index relates potential instability in the middle atmosphere with
+        thickness.  It was proposed by A. J. Van Delden in 2001.  Positive values
+        indicate increased potential for convective weather.  The units are in
+        degrees Kelvin per meter (K/m).
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        pii : number
+            Potential Instability Index (number)
+    '''
+
+    te9 = thermo.thetae(925, interp.temp(prof, 925), interp.dwpt(prof, 925))
+    te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    z5 = interp.hght(prof, 500)
+    z9 = interp.hght(prof, 925)
+
+    pii = ( te9 - te5 ) / ( z5 - z9 )
+
+    return pii
+
+def ko(prof):
+    '''
+        KO Index
+
+        This index was developed by Swedish meteorologists and used heavily
+        by the Deutsche Wetterdienst.  It compares values of equivalent potential
+        temperature at different levels.  It was developed by T. Andersson, M.
+        Andersson, C. Jacobsson, and S. Nilsson.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        ko : number
+            KO Index (number)
+    '''
+
+    te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    te7 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
+    te8 = thermo.thetae(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    te10 = thermo.thetae(1000, interp.temp(prof, 1000), interp.dwpt(prof, 1000))
+
+    ko = ( 0.5 * ( te5 + te7 ) ) - ( 0.5 * ( te8 + te10 ) )
+
+    return ko
+
+def brad(prof):
+    '''
+        Bradbury Index
+
+        Also known as the Potential Wet-Bulb Index, this index is used in Europe.
+        It is a measure of the potential instability between 850 and 500 mb.  It 
+        was defined in 1977 by T. A. M. Bradbury.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        brad : number
+            Bradbury Index (number)
+    '''
+
+    qw5 = thermo.thetaw(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    qw8 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+
+    brad = qw5 - qw8
+
+    return brad
+
+def rack(prof):
+    '''
+        Rackliff Index
+
+        This index, used primarily in Europe during the 1950s, is a simple comparison
+        of the 900 mb wet bulb temperature with the 500 mb dry bulb temperature.
+        It is believed to have been developed by Peter Rackliff during the 1940s.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        rack : number
+            Rackliff Index (number)
+    '''
+
+    qw9 = thermo.thetaw(900, interp.temp(prof, 900), interp.dwpt(prof, 900))
+    tmp5 = interp.temp(prof, 500)
+
+    rack = qw9 - tmp5
+
+    return rack
+
+def jeff(prof):
+    '''
+        Jefferson Index
+
+        A European stability index, the Jefferson Index was intended to be an improvement of the
+        Rackliff Index. The change would make it less dependent on temperature. The version used
+        since the 1960s is a slight modification of G. J. Jefferson's 1963 definition.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        jeff : number
+            Jefferson Index (number)
+    '''
+
+    qw8 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    tmp5 = interp.temp(prof, 500)
+    tmp7 = interp.temp(prof, 700)
+    tdp7 = interp.dwpt(prof, 700)
+
+    jeff = ( 1.6 * qw8 ) - tmp5 - ( 0.5 * (tmp7 - tdp7 ) ) - 8
+
+    return jeff
+
+def esi(prof, pcl):
+    '''
+        Energy Shear Index
+
+        This index, proposed as a way of parameterizing updraft duration, multiplies CAPE by
+        1.5-6 km MSL mean vertical shear magnitude in m/s.  A 2002 study by Brimelow and Reuter
+        indicated considerable success with using this index to forecast large hail.  An ESI
+        value approaching 5 is considered favorable for large hail, with values above 5 not
+        having much further significance.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        esi : number
+            Energy Shear Index (unitless)
+    '''
+
+    p15km, p6km = interp.pres(prof, np.array([1500., 6000.]))
+    msl_15_6km_shr = winds.wind_shear(prof, pbot=p15km, ptop=p6km)
+    msl_15_6km_shr = utils.mag(msl_15_6km_shr[0], msl_15_6km_shr[1])
+    shr156 = utils.KTS2MS(msl_15_6km_shr) / 1000
+
+    esi = shr156 * pcl.bplus
+
+    return esi
+
+def vgp(prof, pcl):
+    '''
+        Vorticity Generation Potential
+
+        The Vorticity Generation Potential index was developed by Erik Rasmussen and
+        David Blanchard in 1998.  It assesses the possibility for vorticity being
+        tilted into the vertical to create rotating updrafts.
+
+        The formula is:
+
+        VGP = sqrt(CAPE) * U03
+
+        where U03 is the mean shear between the surface and 3 km AGL.
+        
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        vgp : number
+            Vorticity Generation Potential (number)
+    '''
+
+    mag03_shr = utils.mag(*prof.sfc_3km_shear) / 1000
+
+    vgp = mag03_shr * ( pcl.bplus ** (1/2) )
+
+    return vgp
+
+def aded1(prof):
+    '''
+        Adedokun Index, version 1
+
+        The Adedokun Index (created by J. A. Adedokun in 1981 and 1982) was developed
+        in two versions for forecasting precipitation in west Africa.  The Index 
+        lowers a 500 mb parcel moist adiabatically to 1000 mb, then compares it to
+        the wet bulb potential temperature (theta-w) of a specified level.
+
+        Version 1 subtracts the parcel's temperature from the theta-w of the 850 mb
+        level.  This version has been found to be better for forecasting non-
+        occurrence of precipitation.
+
+        For both versions, values >= -1 were defined to be indicative of precipitation
+        occurrence while values < -1 were defined to be indicative of precipitation
+        non-occurrence.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        aded1 : number
+            Adedokun Index, version 1 (number)
+    '''
+
+    pclm5 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    thtw85 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+
+    aded1 = thtw85 - pclm5
+
+    return aded1
+
+def aded2(prof):
+    '''
+        Adedokun Index, version 2
+
+        The Adedokun Index (created by J. A. Adedokun in 1981 and 1982) was developed
+        in two versions for forecasting precipitation in west Africa.  The Index 
+        lowers a 500 mb parcel moist adiabatically to 1000 mb, then compares it to
+        the wet bulb potential temperature (theta-w) of a specified level.
+
+        Version 2 subtracts the parcel's temperature from the theta-w of the surface
+        level.  This version has been found to be better for forecasting occurrence
+        of precipitation.
+
+        For both versions, values >= -1 were defined to be indicative of precipitation
+        occurrence while values < -1 were defined to be indicative of precipitation
+        non-occurrence.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        aded1 : number
+            Adedokun Index, version 2 (number)
+    '''
+
+    pclm5 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    thtw_sfc = thermo.thetaw(prof.pres[prof.sfc], prof.tmpc[prof.sfc], prof.dwpc[prof.sfc])
+
+    aded2 = thtw_sfc - pclm5
+
+    return aded2
+
+def ei(prof):
+    '''
+        Energy Index
+
+        The Energy Index (also known as the Total Energy Index) was developed by G. L.
+        Darkow in 1968.  It calculates the moist static energy at the 500 and 850 mb levels
+        and then subtracts the latter from the former.  The energy is calculated in units
+        of cal/gm.  Negative values indicate instability.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        ei : number
+            Energy Index (number)
+    '''
+
+    tmp500 = thermo.ctok(interp.temp(prof, 500)) # Temperature in degrees Kelvin
+    hght500 = interp.hght(prof, 500)
+    mxr500 = thermo.mixratio(500, interp.dwpt(prof,500))
+    tmp850 = thermo.ctok(interp.temp(prof, 850)) # Temperature in degrees Kelvin
+    hght850 = interp.hght(prof, 850)
+    mxr850 = thermo.mixratio(850, interp.dwpt(prof, 850))
+
+    # Calculate moist static energy in joules/kilogram
+    mse5_j = ( 1004 * tmp500 ) + ( G * hght500 ) + ( 2500 * mxr500 )
+    mse8_j = ( 1004 * tmp850 ) + ( G * hght850 ) + ( 2500 * mxr850 )
+
+    # Convert moist static energy to calories/gram
+    mse5_c = mse5_j / 4186.8
+    mse8_c = mse8_j / 4186.8
+
+    ei = mse5_c - mse8_c
+
+    return ei
+
+def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6):
+    '''
+        Enhanced Energy Helicity Index
+
+        The original 0-1 km EHI presented a normalized product of 0-1 km storm-relative helicity
+        (SRH) and 100 mb mean parcel (ML) CAPE. This modified version more closely mimics the
+        fixed-layer significant tornado parameter with its inclusion of the same fixed-layer (0-6 km)
+        bulk wind difference term (SHR6), and the addition of a 4 km AGL max vertical velocity term (WMAX4).
+
+        If surface-based (SB) CAPE exceeds the MLCAPE, the ML lifting condensation level (LCL) in less than
+        1000 m AGL, and the surface temperature - dewpoint depression is no more than 10 F, then the SB
+        parcel is used in the EEHI calculation. Otherwise, the calculation defaults to the ML parcel.
+
+        The index is formulated as follows:
+
+        EEHI = ((CAPE * 0-1 km SRH)/ 160000) * SRH6 * WMAX4
+
+        The 0-6 km bulk wind difference term is capped at a value of 1.5 for SRH6 greater than 30 m/s,
+        (SHR6 / 20 m/s) for values from 12.5-30 m/s, and set to 0.0 when SHR6 is less than 12.5 m/s.
+        The WMAX4 term is capped at 1.5 for WMAX4 greater than 30 m/s, (WMAX4 / 20 m/s) for values
+        from 10-30 m/s, and set to 0.0 when WMAX4 is less than 10 m/s. Lastly, the entire index is
+        set to 0.0 if the average of the SBLCL and MLLCL is greater than 2000 m AGL.
+
+        This enhanced EHI is meant to highlight tornadic supercell potential into a lower range of buoyancy,
+        compared to the fixed-layer significant tornado parameter, with decreased false alarms compared to
+        the original 0-1 km EHI. The WMAX4 term reflects the thermodynamic potential for low-level vortex
+        stretching, while the SB parcel is used for CAPE calculations in relatively moist environments more
+        typical of the cool season or tropical cyclones. Values greater than 1 are associated with greater
+        probabilities of tornadic supercells.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        sbcape : Surface based CAPE from the parcel class (J/kg)
+        sblcl : Surface based lifted condensation level (m)
+        mllcl : Mixed-layer lifted condensation level (m)
+        bwd6 : Bulk wind difference between 0 to 6 km (m/s)
+
+        Returns
+        -------
+        eehi : number
+            Enhanced Energy Helicity Index (unitless)
+    '''
+
+    tmpsfc = thermo.ctof(prof.tmpc[prof.sfc])
+    dptsfc = thermo.ctof(prof.dwpc[prof.sfc])
+    sbcape = prof.sbpcl.bplus
+    mlcape = prof.mlpcl.bplus
+
+    if sbcape > mlcape and mllcl < 1000 and tmpsfc - dptsfc <= 10:
+        capef = sbcape
+        cape4 = prof.sbpcl.b4km
+    else:
+        capef = mlcape
+        cape4 = prof.mlpcl.b4km
+    
+    wmax4 = 2 * ( cape4 ** 0.5 )
+
+    if bwd6 > 30:
+        srh6f = 1.5
+    elif bwd6 < 12.5:
+        srh6f = 0
+    else:
+        srh6f = bwd6 / 20
+    
+    if wmax4 > 30:
+        wmax4f = 1.5
+    elif wmax4 < 10:
+        wmax4f = 0
+    else:
+        wmax4f = wmax4 / 20
+    
+    if ( sblcl + mllcl ) / 2 < 2000:
+        eehi = 0
+    else:
+        eehi = (( capef * srh01 ) / 160000 ) * srh6f * wmax4f
+    
+    return eehi
+
+def vtp(prof, pcl, mlcape, esrh, ebwd, mllcl, mlcinh):
+    '''
+        Violent Tornado Parameter
+
+        From Hampshire et. al. 2017, JOM page 8.
+
+        Research using observed soundings found that 0-3 km CAPE and 0-3 km lapse rate were notable
+        discriminators of violent tornado environments (verses weak and/or significant tornado environments).
+        These parameters were combined into the effective layer version of the Significant Tornado Parameter
+        (STP) to create the Violent Tornado Parameter (VTP).
+
+        Parameters
+        ----------
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        esrh : effective storm relative helicity (m2/s2)
+        ebwd : effective bulk wind difference (m/s)
+        mllcl : mixed-layer lifted condensation level (m)
+        mlcinh : mixed-layer convective inhibition (J/kg)
+
+        Returns
+        -------
+        vtp : number
+            Violent Tornado Parameter (unitless)
+    '''
+
+    cape_term = mlcape / 1500.
+    eshr_term = esrh / 150.
+    lr03_term = lapse_rate(prof, 0, 3000, pres=False) / 6.5
+    
+    if ebwd < 12.5:
+        ebwd_term = 0.
+    elif ebwd > 30.:
+        ebwd_term = 1.5
+    else:
+        ebwd_term  = ebwd / 20.
+
+    if mllcl < 1000.:
+        lcl_term = 1.0
+    elif mllcl > 2000.:
+        lcl_term = 0.0
+    else:
+        lcl_term = ((2000. - mllcl) / 1000.)
+
+    if mlcinh > -50:
+        cinh_term = 1.0
+    elif mlcinh < -200:
+        cinh_term = 0
+    else:
+        cinh_term = ((mlcinh + 200.) / 150.)
+    
+    if prof.mlpcl.b3km > 100:
+        cape3_term = 2
+    else:
+        cape3_term = prof.mlpcl.b3km / 50
+
+    vtp = np.maximum(cape_term * eshr_term * ebwd_term * lcl_term * cinh_term * cape3_term * lr03_term, 0)
+    return vtp
+
+def snsq(prof):
+    '''
+        Snow Squall Parameter
+
+        From Banacos et. al. 2014, JOM page 142.
+
+        A non-dimensional composite parameter that combines 0-2 km AGL relative humidity, 0-2 km AGL
+        potential instability (theta-e decreases with height), and 0-2 km AGL mean wind speed (m/s).
+        The intent of the parameter is to identify areas with low-level potential instability, sufficient
+        moisture, and strong winds to support snow squall development. Surface potential temperatures
+        (theta) and MSL pressure are also plotted to identify strong baroclinic zones which often
+        provide the focused low-level ascent in cases of narrow snow bands.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        snsq : number
+            Snow Squall Parameter (unitless)
+    '''
+
+    sfc_pres = prof.pres[prof.sfc]
+    pres_2km = interp.pres(prof, interp.to_msl(prof, 2000))
+    relh02 = mean_relh(prof, pbot=sfc_pres, ptop=pres_2km)
+    sfc_thetae = prof.thetae[prof.sfc]
+    thetae_2km = interp.thetae(prof, pres_2km)
+    thetae_d02 = thetae_2km - sfc_thetae
+    mw02 = utils.KTS2MS(utils.mag(*winds.mean_wind_npw(prof, pbot=sfc_pres, ptop=pres_2km)))
+    sfc_wtb = prof.wetbulb[prof.sfc]
+
+    if relh02 < 60:
+        relhf = 0
+    else:
+        relhf = ( relh02 - 60 ) / 15
+    
+    if thetae_d02 > 4:
+        thetaef = 0
+    else:
+        thetaef = ( 4 - thetae_d02 ) / 4
+    
+    mwf = mw02 / 9
+
+    if sfc_wtb >= 1:
+        snsq = 0
+    else:
+        snsq = relhf * thetaef * mwf
+    
+    return snsq

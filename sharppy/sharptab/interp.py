@@ -7,7 +7,7 @@ from sharppy.sharptab import utils, thermo
 from sharppy.sharptab.constants import *
 
 
-__all__ = ['pres', 'hght', 'temp', 'dwpt', 'vtmp', 'components', 'vec']
+__all__ = ['pres', 'hght', 'temp', 'dwpt', 'vtmp', 'thetae', 'components', 'vec']
 __all__ += ['to_agl', 'to_msl']
 
 
