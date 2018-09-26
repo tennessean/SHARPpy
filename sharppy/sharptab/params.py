@@ -2355,7 +2355,7 @@ def sherb(prof, **kwargs):
     if effective == False:
         p3km = interp.pres(prof, interp.to_msl(prof, 3000))
         sfc_pres = prof.pres[prof.get_sfc()]
-        shear = utils.KTS2MS(winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km))
+        shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
         sherb = ( shear / 26. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
     else:
         if hasattr(prof, 'ebwd'):
@@ -3522,7 +3522,7 @@ def aded2(prof):
     '''
 
     pclm5 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
-    thtw_sfc = thermo.thetaw(prof.pres[prof.sfc], prof.temp[prof.sfc], prof.dwpt[prof.sfc])
+    thtw_sfc = thermo.thetaw(prof.pres[prof.sfc], prof.tmpc[prof.sfc], prof.dwpc[prof.sfc])
 
     aded2 = thtw_sfc - pclm5
 
@@ -3552,11 +3552,11 @@ def ei(prof):
     mxr500 = thermo.mixratio(500, interp.dwpt(prof,500))
     tmp850 = thermo.ctok(interp.temp(prof, 850)) # Temperature in degrees Kelvin
     hght850 = interp.hght(prof, 850)
-    mxr850 = thermo.mixratio(850, interp.dwpt(prof, 500))
+    mxr850 = thermo.mixratio(850, interp.dwpt(prof, 850))
 
     # Calculate moist static energy in joules/kilogram
-    mse5_j = ( 1004 * tmp500 ) + ( G * hght500 ) + ( 2500000 * mxr500 )
-    mse8_j = ( 1004 * tmp850 ) + ( G * hght850 ) + ( 2500000 * mxr850 )
+    mse5_j = ( 1004 * tmp500 ) + ( G * hght500 ) + ( 2500 * mxr500 )
+    mse8_j = ( 1004 * tmp850 ) + ( G * hght850 ) + ( 2500 * mxr850 )
 
     # Convert moist static energy to calories/gram
     mse5_c = mse5_j / 4186.8
