@@ -3129,7 +3129,7 @@ def spot(prof):
 
     return spot
 
-def thomp(prof):
+def thomp(prof, pcl):
     '''
         Thompson Index
 
@@ -3241,7 +3241,7 @@ def boyden(prof):
 
     return boyden
 
-def dci(prof):
+def dci(prof, pcl):
     '''
         Deep Convective Index
 
