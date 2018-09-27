@@ -3590,7 +3590,7 @@ def ei(prof):
 
     return ei
 
-def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6):
+def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     '''
         Enhanced Energy Helicity Index
 
@@ -3638,15 +3638,21 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6):
 
     tmpsfc = thermo.ctof(prof.tmpc[prof.sfc])
     dptsfc = thermo.ctof(prof.dwpc[prof.sfc])
-    sbcape = prof.sbpcl.bplus
-    mlcape = prof.mlpcl.bplus
+    sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
+
+    mlpcl = kwargs.get('mlpcl', None)
+    if not mlpcl:
+        try:
+            mlpcl = prof.mlpcl
+        except:
+            mlpcl = parcelx(prof, flag=4)
 
     if sbcape > mlcape and mllcl < 1000 and tmpsfc - dptsfc <= 10:
         capef = sbcape
-        cape4 = prof.sbpcl.b4km
+        cape4 = sbpcl.b4km
     else:
         capef = mlcape
-        cape4 = prof.mlpcl.b4km
+        cape4 = mlpcl.b4km
     
     wmax4 = 2 * ( cape4 ** 0.5 )
 
@@ -3664,14 +3670,14 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6):
     else:
         wmax4f = wmax4 / 20
     
-    if ( sblcl + mllcl ) / 2 < 2000:
+    if ( sblcl + mllcl ) / 2 > 2000:
         eehi = 0
     else:
         eehi = (( capef * srh01 ) / 160000 ) * srh6f * wmax4f
     
     return eehi
 
-def vtp(prof, pcl, mlcape, esrh, ebwd, mllcl, mlcinh):
+def vtp(prof, pcl, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
     '''
         Violent Tornado Parameter
 
@@ -3699,6 +3705,13 @@ def vtp(prof, pcl, mlcape, esrh, ebwd, mllcl, mlcinh):
     cape_term = mlcape / 1500.
     eshr_term = esrh / 150.
     lr03_term = lapse_rate(prof, 0, 3000, pres=False) / 6.5
+	
+    mlpcl = kwargs.get('mlpcl', None)
+    if not mlpcl:
+        try:
+            mlpcl = prof.mlpcl
+        except:
+            mlpcl = parcelx(prof, flag=4)
     
     if ebwd < 12.5:
         ebwd_term = 0.
@@ -3724,7 +3737,7 @@ def vtp(prof, pcl, mlcape, esrh, ebwd, mllcl, mlcinh):
     if prof.mlpcl.b3km > 100:
         cape3_term = 2
     else:
-        cape3_term = prof.mlpcl.b3km / 50
+        cape3_term = mlpcl.b3km / 50
 
     vtp = np.maximum(cape_term * eshr_term * ebwd_term * lcl_term * cinh_term * cape3_term * lr03_term, 0)
     return vtp
