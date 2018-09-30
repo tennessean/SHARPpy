@@ -15,7 +15,9 @@ __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_sev
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
-__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq']
+__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
+__all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi']
+__all__ += ['fsi', 'fog_point', 'fog_threat']
 
 class DefineParcel(object):
     '''
@@ -3340,9 +3342,16 @@ def ko(prof):
     te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
     te7 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
     te8 = thermo.thetae(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
-    te10 = thermo.thetae(1000, interp.temp(prof, 1000), interp.dwpt(prof, 1000))
+    sfc_pres = prof.pres[prof.sfc]
 
-    ko = ( 0.5 * ( te5 + te7 ) ) - ( 0.5 * ( te8 + te10 ) )
+    if sfc_pres < 1000:
+        pr1s = sfc_pres
+    else:
+        pr1s = 1000
+    
+    te1s = thermo.thetae(pr1s, interp.temp(prof, pr1s), interp.dwpt(prof, pr1s))
+
+    ko = ( 0.5 * ( te5 + te7 ) ) - ( 0.5 * ( te8 + te1s ) )
 
     return ko
 
@@ -3792,3 +3801,313 @@ def snsq(prof):
         snsq = relhf * thetaef * mwf
     
     return snsq
+
+def hi(prof):
+    '''
+        Humidity Index
+
+        This index, derived by Z. Litynska in 1976, calculates moisture and instability using the dewpoint
+        depressions of several levels.  It has proven to be fairly reliable, especially in the
+        Mediterranean regions of the world.  Smaller values indicate higher moisture content and greater
+        instability potential.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        hi :number
+            Humidity Index (number)
+    '''
+
+    tmp8 = interp.temp(prof, 850)
+    dpt8 = interp.dwpt(prof, 850)
+    tmp7 = interp.temp(prof, 700)
+    dpt7 = interp.dwpt(prof, 700)
+    tmp5 = interp.temp(prof, 500)
+    dpt5 = interp.dwpt(prof, 500)
+
+    hi = ( tmp8 - dpt8 ) + ( tmp7 - dpt7 ) + ( tmp5 - dpt5 )
+
+    return hi
+
+def windex(prof, **kwargs):
+    '''
+        Wind Index
+
+        This index, a measure of microburst potential and downdraft instability, estimates maximum
+        convective wind gust speeds.  Created by Donald McCann in 1994, the index is displayed in knots.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        windex : knots
+            WINDEX (knots)
+    '''
+
+    frz_lvl = kwargs.get('frz_lvl', None)
+    sfc_pres = prof.pres[prof.sfc]
+    pres_1km = interp.pres(prof, interp.to_msl(prof, 1000))
+    mxr01 = mean_mixratio(prof, pbot=sfc_pres, ptop=pres_1km)
+    
+    if not frz_lvl:
+        frz_lvl = interp.hght(prof, temp_lvl(prof, 0))
+    
+    frz_pres = interp.pres(prof, frz_lvl)
+    frz_dwpt = interp.dwpt(prof, frz_pres)
+    mxr_frz = thermo.mixratio(frz_pres, frz_dwpt)
+    hm_m = interp.to_agl(prof, frz_lvl)
+    hm_km = hm_m / 1000
+    lr_frz = lapse_rate(prof, 0, hm_m, pres=False)
+
+    if mxr01 > 12:
+        rq = 1
+    else:
+        rq = mxr01 / 12
+
+    windex = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
+
+    return windex
+
+def wmsi(prof, **kwargs):
+    '''
+        Wet Microburst Severity Index
+
+        This index, developed by K. L. Pryor and G. P. Ellrod in 2003, was developed to better
+        assess the potential deverity of wet microbursts.  WSMI is a product of CAPE
+        (specifically from the most unstable parcel) and delta-Theta-E (see the Theta-E
+        Index parameter).
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        wmsi : number
+            Wet Microburst Severity Index (number)
+    '''
+
+    mupcl = kwargs.get('mupcl', None)
+    sfc_theta = prof.thetae[prof.sfc]
+    sfc_pres = prof.pres[prof.sfc]
+    top_pres = sfc_pres - 400.
+
+    if not mupcl:
+        try:
+            mupcl = prof.mupcl
+        except:
+            mulplvals = DefineParcel(prof, flag=3, pres=300)
+            mupcl = cape(prof, lplvals=mulplvals)
+    mucape = mupcl.bplus
+
+    layer_idxs = ma.where(prof.pres >= top_pres)[0]
+    min_thetae = ma.min(prof.thetae[layer_idxs])
+
+    dthetae = sfc_theta - min_thetae
+
+    wmsi = ( mucape * dthetae ) / 1000
+
+    return wmsi
+
+def dmpi(prof):
+    '''
+        Dry Microburst Potential Index
+
+        This index was primarily derived by R. Wakimoto in 1985 to forecast potential for
+        dry microbursts.  The original index, calculated using soundings in the region of
+        Denver, CO, used the 700 and 500 mb layers for its calculations.  However, the
+        RAOB Program manual recommends the use of the 5,000 and 13,000-ft AGL layers
+        so that the results can be consistently used for any worldwide sounding,
+        regardless of station elevation.  This version is what will be used here.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        dmpi : number
+            Dry Microburst Potential Index (number)
+    '''
+
+    lvl5 = interp.to_msl(prof, utils.FT2M(5000))
+    lvl13 = interp.to_msl(prof, utils.FT2M(13000))
+    pres5 = interp.pres(prof, lvl5)
+    pres13 = interp.pres(prof, lvl13)
+    tmp5 = interp.temp(prof, pres5)
+    dpt5 = interp.dwpt(prof, pres5)
+    tmp13 = interp.temp(prof, pres13)
+    dpt13 = interp.dwpt(prof, pres13)
+    lr_513 = lapse_rate(prof, lvl5, lvl13, pres=False)
+
+    dmpi = lr_513 - ( tmp5 - dpt5 ) - ( tmp13 - dpt13 )
+
+    return dmpi
+
+def hmi(prof):
+    '''
+        Hybrid Microburst Index
+
+        This index, created by K. L. Pryor in 2006, is designed to detect conditions
+        favorable for both wet and dry microbursts.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        hmi : number
+            Hybrid Microburst Index
+    '''
+
+    tmp8 = interp.temp(prof, 850)
+    dpt8 = interp.dwpt(prof, 850)
+    tmp6 = interp.temp(prof, 670)
+    dpt6 = interp.dwpt(prof, 670)
+    lr_86 = lapse_rate(prof, 850, 670, pres=True)
+
+    hmi = lr_86 - ( tmp8 - dpt8 ) - ( tmp6 - dpt6 )
+
+    return hmi
+
+def mwpi(prof, pcl):
+    '''
+        Microburst Windspeed Potential Index
+
+        This index is designed to improve the Hybrid Microburst Index by adding a
+        term related to CAPE values.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        mwpi : number
+            Microburst Windspeed Potential Index (number)
+    '''
+
+    hmi_t = getattr(prof, 'hmi', hmi(prof))
+
+    mwpi = ( pcl.bplus / 100 ) + hmi_t
+
+    return mwpi
+
+def mdpi(prof):
+    '''
+        Microburst Day Potential Index
+
+        This index, developed jointly by the USAFs 45th Weather Squadronm and NASA's Applied
+        Meteorology Uint (AMU) in 1995, calculates the risk of a microburst based on the maximum
+        Theta-E temperature difference at two levels: the lowest 150 mb and the 650-500 mb levels.
+        If the MDPI value is at least 1, microbursts are likely.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        mdpi : number
+            Microburst Day Potential Index (number)
+    '''
+    
+    thetae = getattr(prof, 'thetae', prof.get_thetae_profile())
+    sfc_pres = prof.pres[prof.sfc]
+    upr_pres = sfc_pres - 150.
+    
+    layer_idxs_low = ma.where(prof.pres >= upr_pres)[0]
+    layer_idxs_high = ma.where(650 >= 500)[0]
+    min_thetae = ma.min(prof.thetae[layer_idxs_high])
+    max_thetae = ma.max(prof.thetae[layer_idxs_low])
+
+    mdpi = ( max_thetae - min_thetae ) / 30
+
+    return mdpi
+
+def fsi(prof):
+    '''
+        Fog Stability Index
+        
+        Although this index was developed by USAF meteorologists for use in Germany, it can
+        also be applied to similar climates.  The index is designed to indicate the
+        potential for radiation fog.  Lower values indicate higher chances of radiation fog.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        fsi : number
+            Fog Stability Index (number)
+    '''
+
+    tmp_sfc = prof.tmpc[prof.sfc]
+    dpt_sfc = prof.dwpc[prof.sfc]
+    tmp8 = interp.temp(prof, 850)
+    vec8 = interp.vec(prof, 850)
+
+    fsi = ( 4 * tmp_sfc ) - ( 2 * ( tmp8 - dpt_sfc ) ) + vec8[1]
+
+    return fsi
+
+def fog_point(prof, pcl):
+    '''
+        Fog Point
+
+        This value indicates the temperature at which radiation fog will form.  It is
+        determined by following the saturation mixing ratio line from the dew point curve
+        at the LCL pressure level to the surface.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        fog_point : (float [C])
+            Fog Point (Celsuis)
+    '''
+
+    dpt_lcl = interp.dwpt(prof, pcl.lclpres)
+    mxr_lcl = thermo.mixratio(pcl.lclpres, dpt_lcl)
+    sfc_pres = prof.pres[prof.sfc]
+
+    fog_point = thermo.temp_at_mixrat(mxr_lcl, sfc_pres)
+
+    return fog_point
+
+def fog_threat(prof, pcl):
+    '''
+        Fog Threat
+
+        This value indicates the potential for radiation fog.  It is calculated by
+        subtracting the fog point from the 850 mb wet-bulb potential temperature.
+        Lower values indicate a higher likelihood for radiation fog.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        fog_threat : number
+            Fog Threat (number)
+    '''
+
+    fp = getattr(prof, 'fog_point', fog_point(prof, pcl))
+    thtw85 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+
+    fog_threat = thtw85 - fp
+
+    return fog_threat
