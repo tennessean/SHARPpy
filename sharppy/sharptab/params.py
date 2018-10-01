@@ -18,6 +18,7 @@ __all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rac
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
 __all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
+__all__ += ['mvv', 'tsi', 'jli']
 
 class DefineParcel(object):
     '''
@@ -2966,8 +2967,7 @@ def ehi(prof, pcl, hbot, htop, stu=0, stv=0):
             Energy Helicity Index (unitless)
     '''
 
-    srwind = bunkers_storm_motion(prof)
-    helicity = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
+    helicity = winds.helicity(prof, hbot, htop, stu = prof.srwind[0], stv = prof.srwind[1])[0]
     ehi = (helicity * pcl.bplus) / 160000.
 
     return ehi
@@ -3089,16 +3089,16 @@ def spot(prof):
             SPOT Index (number)
     '''
 
-    tmpc = prof.tmpc[prof.sfc]
-    dwpc = prof.dwpc[prof.sfc]
+    tmpc_sfc = prof.tmpc[prof.sfc]
+    dwpc_sfc = prof.dwpc[prof.sfc]
     sfc_pres = prof.pres[prof.sfc]
     sfc_hght = prof.hght[prof.sfc]
     wdirsfc = prof.wdir[prof.sfc]
     wspdsfc = prof.wspd[prof.sfc]
 
     # Translate temperatures from Celsius to Fahrenheit
-    tmpf = thermo.ctof(tmpc)
-    dwpf = thermo.ctof(dwpc)
+    tmpf = thermo.ctof(tmpc_sfc)
+    dwpf = thermo.ctof(dwpc_sfc)
 
     # Calculate altimeter setting
     asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** 0.190163 ) * (( 0.0065 * sfc_hght ) / 288.15))) ** ( 1 / 0.190163 )) # Calculate altimeter setting in mb
@@ -3200,11 +3200,11 @@ def tq(prof):
             TQ Index (number)
     '''
 
-    t8 = interp.temp(prof, 850)
-    d8 = interp.dwpt(prof, 850)
-    t7 = interp.temp(prof, 700)
+    tmp850 = interp.temp(prof, 850)
+    dpt850 = interp.dwpt(prof, 850)
+    tmp700 = interp.temp(prof, 700)
     
-    tq = t8 + d8 - ( 1.7 * t7 )
+    tq = tmp850 + dpt850 - ( 1.7 * tmp700 )
 
     return tq
 
@@ -3259,11 +3259,11 @@ def boyden(prof):
     '''
 
     # Height in decameters (dam)
-    h7 = interp.hght(prof, 700) / 10
-    h10 = interp.hght(prof, 1000) / 10
-    tmp7 = interp.temp(prof, 700)
+    h700 = interp.hght(prof, 700) / 10
+    h1000 = interp.hght(prof, 1000) / 10
+    tmp700 = interp.temp(prof, 700)
     
-    boyden = h7 - h10 - tmp7 - 200
+    boyden = h700 - h1000 - tmp700 - 200
 
     return boyden
 
@@ -3285,10 +3285,10 @@ def dci(prof, pcl):
             Deep Convective Index (number)
     '''
 
-    tmp85 = interp.temp(prof, 850)
-    dpt85 = interp.dwpt(prof, 850)
+    tmp850 = interp.temp(prof, 850)
+    dpt850 = interp.dwpt(prof, 850)
 
-    dci = tmp85 + dpt85 - pcl.li5
+    dci = tmp850 + dpt850 - pcl.li5
 
     return dci
 
@@ -3311,12 +3311,12 @@ def pii(prof):
             Potential Instability Index (number)
     '''
 
-    te9 = thermo.thetae(925, interp.temp(prof, 925), interp.dwpt(prof, 925))
-    te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
-    z5 = interp.hght(prof, 500)
-    z9 = interp.hght(prof, 925)
+    te925 = thermo.thetae(925, interp.temp(prof, 925), interp.dwpt(prof, 925))
+    te500 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    z500 = interp.hght(prof, 500)
+    z925 = interp.hght(prof, 925)
 
-    pii = ( te9 - te5 ) / ( z5 - z9 )
+    pii = ( te925 - te500 ) / ( z500 - z925 )
 
     return pii
 
@@ -3339,9 +3339,9 @@ def ko(prof):
             KO Index (number)
     '''
 
-    te5 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
-    te7 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
-    te8 = thermo.thetae(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    te500 = thermo.thetae(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    te700 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
+    te850 = thermo.thetae(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
     sfc_pres = prof.pres[prof.sfc]
 
     if sfc_pres < 1000:
@@ -3351,7 +3351,7 @@ def ko(prof):
     
     te1s = thermo.thetae(pr1s, interp.temp(prof, pr1s), interp.dwpt(prof, pr1s))
 
-    ko = ( 0.5 * ( te5 + te7 ) ) - ( 0.5 * ( te8 + te1s ) )
+    ko = ( 0.5 * ( te500 + te700 ) ) - ( 0.5 * ( te850 + te1s ) )
 
     return ko
 
@@ -3373,10 +3373,10 @@ def brad(prof):
             Bradbury Index (number)
     '''
 
-    qw5 = thermo.thetaw(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
-    qw8 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    qw500 = thermo.thetaw(500, interp.temp(prof, 500), interp.dwpt(prof, 500))
+    qw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
 
-    brad = qw5 - qw8
+    brad = qw500 - qw850
 
     return brad
 
@@ -3398,10 +3398,10 @@ def rack(prof):
             Rackliff Index (number)
     '''
 
-    qw9 = thermo.thetaw(900, interp.temp(prof, 900), interp.dwpt(prof, 900))
-    tmp5 = interp.temp(prof, 500)
+    qw900 = thermo.thetaw(900, interp.temp(prof, 900), interp.dwpt(prof, 900))
+    tmp500 = interp.temp(prof, 500)
 
-    rack = qw9 - tmp5
+    rack = qw900 - tmp500
 
     return rack
 
@@ -3423,12 +3423,12 @@ def jeff(prof):
             Jefferson Index (number)
     '''
 
-    qw8 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
-    tmp5 = interp.temp(prof, 500)
-    tmp7 = interp.temp(prof, 700)
-    tdp7 = interp.dwpt(prof, 700)
+    qw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    tmp500 = interp.temp(prof, 500)
+    tmp700 = interp.temp(prof, 700)
+    dpt700 = interp.dwpt(prof, 700)
 
-    jeff = ( 1.6 * qw8 ) - tmp5 - ( 0.5 * (tmp7 - tdp7 ) ) - 8
+    jeff = ( 1.6 * qw850 ) - tmp500 - ( 0.5 * (tmp700 - dpt700 ) ) - 8
 
     return jeff
 
@@ -3487,7 +3487,7 @@ def vgp(prof, pcl):
             Vorticity Generation Potential (number)
     '''
 
-    mag03_shr = utils.mag(*prof.sfc_3km_shear) / 1000
+    mag03_shr = utils.mag(*prof.sfc_3km_shear) / 3000
 
     vgp = mag03_shr * ( pcl.bplus ** (1/2) )
 
@@ -3520,10 +3520,10 @@ def aded1(prof):
             Adedokun Index, version 1 (number)
     '''
 
-    pclm5 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
-    thtw85 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    pclm500 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    thtw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
 
-    aded1 = thtw85 - pclm5
+    aded1 = thtw850 - pclm500
 
     return aded1
 
@@ -3554,10 +3554,10 @@ def aded2(prof):
             Adedokun Index, version 2 (number)
     '''
 
-    pclm5 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    pclm500 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
     thtw_sfc = thermo.thetaw(prof.pres[prof.sfc], prof.tmpc[prof.sfc], prof.dwpc[prof.sfc])
 
-    aded2 = thtw_sfc - pclm5
+    aded2 = thtw_sfc - pclm500
 
     return aded2
 
@@ -3821,14 +3821,14 @@ def hi(prof):
             Humidity Index (number)
     '''
 
-    tmp8 = interp.temp(prof, 850)
-    dpt8 = interp.dwpt(prof, 850)
-    tmp7 = interp.temp(prof, 700)
-    dpt7 = interp.dwpt(prof, 700)
-    tmp5 = interp.temp(prof, 500)
-    dpt5 = interp.dwpt(prof, 500)
+    tmp850 = interp.temp(prof, 850)
+    dpt850 = interp.dwpt(prof, 850)
+    tmp700 = interp.temp(prof, 700)
+    dpt700 = interp.dwpt(prof, 700)
+    tmp500 = interp.temp(prof, 500)
+    dpt500 = interp.dwpt(prof, 500)
 
-    hi = ( tmp8 - dpt8 ) + ( tmp7 - dpt7 ) + ( tmp5 - dpt5 )
+    hi = ( tmp850 - dpt850 ) + ( tmp700 - dpt700 ) + ( tmp500 - dpt500 )
 
     return hi
 
@@ -3966,13 +3966,13 @@ def hmi(prof):
             Hybrid Microburst Index
     '''
 
-    tmp8 = interp.temp(prof, 850)
-    dpt8 = interp.dwpt(prof, 850)
-    tmp6 = interp.temp(prof, 670)
-    dpt6 = interp.dwpt(prof, 670)
+    tmp850 = interp.temp(prof, 850)
+    dpt850 = interp.dwpt(prof, 850)
+    tmp670 = interp.temp(prof, 670)
+    dpt670 = interp.dwpt(prof, 670)
     lr_86 = lapse_rate(prof, 850, 670, pres=True)
 
-    hmi = lr_86 - ( tmp8 - dpt8 ) - ( tmp6 - dpt6 )
+    hmi = lr_86 - ( tmp850 - dpt850 ) - ( tmp670 - dpt670 )
 
     return hmi
 
@@ -4052,10 +4052,10 @@ def fsi(prof):
 
     tmp_sfc = prof.tmpc[prof.sfc]
     dpt_sfc = prof.dwpc[prof.sfc]
-    tmp8 = interp.temp(prof, 850)
-    vec8 = interp.vec(prof, 850)
+    tmp850 = interp.temp(prof, 850)
+    vec850 = interp.vec(prof, 850)
 
-    fsi = ( 4 * tmp_sfc ) - ( 2 * ( tmp8 - dpt_sfc ) ) + vec8[1]
+    fsi = ( 4 * tmp_sfc ) - ( 2 * ( tmp850 - dpt_sfc ) ) + vec850[1]
 
     return fsi
 
@@ -4106,8 +4106,108 @@ def fog_threat(prof, pcl):
     '''
 
     fp = getattr(prof, 'fog_point', fog_point(prof, pcl))
-    thtw85 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
+    thtw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
 
-    fog_threat = thtw85 - fp
+    fog_threat = thtw850 - fp
 
     return fog_threat
+
+def mvv(prof, pcl):
+    '''
+        Maximum Vertical Velocity
+
+        This is the maximum vertical velocity of the potential convective updraft.
+        MVV is a function of CAPE.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        mvv : (float [m/s])
+            Maximum Vertical Velocity (meters/second)
+    '''
+
+    mvv =  ( 2 * pcl.bplus ) ** 0.5
+
+    return mvv
+
+def tsi(prof, pcl, hbot, htop, stu=0, stv=0):
+    '''
+        Thunderstorm Severity Index
+
+        This index is used to help measure and predict the severity of
+        thunderstorm events, using a regression equation based around instability,
+        shear, helicity, and storm motion.  Lower values indicate higher
+        potential severity of a thunderstorm event; however, this is all
+        contigent on whether or not thunderstorms actually do occur.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+        hbot : number
+            Height of the bottom of the helicity layer [m]
+        htop : number
+            Height of the top of the helicity layer [m]
+        stu : number
+            Storm-relative wind U component [kts]
+            (optional; default=0)
+        stv : number
+            Storm-relative wind V component [kts]
+            (optional; default=0)
+
+        Returns
+        -------
+        tsi : number
+            Thunderstorm Severity Index (number)
+    '''
+
+    wmax_c = winds.max_wind(prof, 0, 25000, all=False)
+    wmax = utils.mag(wmax_c[0], wmax_c[1], missing=MISSING)
+    srh = winds.helicity(prof, hbot, htop, stu = prof.srwind[0], stv = prof.srwind[1])[0]
+    ehis = getattr(prof, 'ehi', ehi(prof, pcl, hbot, htop, stu=0, stv=0))
+    sspd = utils.mag(prof.srwind[0], prof.srwind[1], missing=MISSING)
+
+    tsi = 4.943709 - ( 0.000777 * pcl.bplus ) - ( 0.004005 * wmax ) + ( 0.181217 * ehis ) - ( 0.026867 * sspd ) - (0.006479 * srh )
+
+    return tsi
+
+def jli(prof):
+    '''
+        Johnson Lag Index
+
+        Developed by D. L. Johnson in 1982, this index was based on a series of soundings
+        made during experiments in the 1970s.  It is a parametric index that takes into
+        account temperature and moisture differences at several layers, and is used to
+        predict the likelihood of convective weather within several hours of the original
+        sounding.  Negative values indicate increasing chances for convective weather.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        jli : number
+            Johnson Lag Index (number)
+    '''
+
+    tmp800 = interp.temp(prof, 800)
+    tmp650 = interp.temp(prof, 650)
+    tmp500 = interp.temp(prof, 500)
+    thetae900 = thermo.thetae(900, interp.temp(prof, 900), interp.dwpt(prof, 900))
+    thetae800 = thermo.thetae(800, interp.temp(prof, 800), interp.dwpt(prof, 800))
+    thetae750 = thermo.thetae(750, interp.temp(prof, 750), interp.dwpt(prof, 750))
+    thetae700 = thermo.thetae(700, interp.temp(prof, 700), interp.dwpt(prof, 700))
+
+    dt68 = tmp650 - tmp800
+    dt56 = tmp500 - tmp650
+    dte89 = thetae800 - thetae900
+    dte75 = thetae700 - thetae750
+
+    jli = ( -11.5 - dt68 ) + ( 2 * ( dt56 + 14.9 ) ) + (2 * ( dte89 + 3.5 ) ) - ( ( 3.0 + dte75 ) / 3 )
+
+    return jli
