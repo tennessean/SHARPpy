@@ -18,7 +18,7 @@ __all__ += ['thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rac
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
 __all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli']
+__all__ += ['mvv', 'tsi', 'jli', 'ncape']
 
 class DefineParcel(object):
     '''
@@ -2967,7 +2967,8 @@ def ehi(prof, pcl, hbot, htop, stu=0, stv=0):
             Energy Helicity Index (unitless)
     '''
 
-    helicity = winds.helicity(prof, hbot, htop, stu = prof.srwind[0], stv = prof.srwind[1])[0]
+    srwind = bunkers_storm_motion(prof)
+    helicity = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
     ehi = (helicity * pcl.bplus) / 160000.
 
     return ehi
@@ -3462,7 +3463,7 @@ def esi(prof, pcl):
 
     return esi
 
-def vgp(prof, pcl):
+def vgp(prof, pcl, **kwargs):
     '''
         Vorticity Generation Potential
 
@@ -3487,9 +3488,21 @@ def vgp(prof, pcl):
             Vorticity Generation Potential (number)
     '''
 
-    mag03_shr = utils.mag(*prof.sfc_3km_shear) / 3000
+    sfc3shr = kwargs.get('sfc3shr', None)
 
-    vgp = mag03_shr * ( pcl.bplus ** (1/2) )
+    if not sfc3shr:
+        try:
+            sfc_6km_shear = prof.sfc_3km_shear
+        except:
+            sfc_pres = prof.pres[prof.sfc]
+            p3km = interp.pres(prof, interp.to_msl(prof, 3000.))
+            sfc_3km_shear = winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)
+    
+    sfc_3km_shear = utils.mag(sfc_3km_shear[0], sfc_3km_shear[1])
+    shr03 = utils.KTS2MS(sfc_3km_shear)
+    mag03_shr = shr03 / 3000
+
+    vgp = mag03_shr * ( pcl.bplus ** 0.5 )
 
     return vgp
 
@@ -3808,7 +3821,7 @@ def hi(prof):
 
         This index, derived by Z. Litynska in 1976, calculates moisture and instability using the dewpoint
         depressions of several levels.  It has proven to be fairly reliable, especially in the
-        Mediterranean regions of the world.  Smaller values indicate higher moisture content and greater
+        Mediterranean regions of the world.  Lower values indicate higher moisture content and greater
         instability potential.
 
         Parameters
@@ -3945,7 +3958,7 @@ def dmpi(prof):
     dpt13 = interp.dwpt(prof, pres13)
     lr_513 = lapse_rate(prof, lvl5, lvl13, pres=False)
 
-    dmpi = lr_513 - ( tmp5 - dpt5 ) - ( tmp13 - dpt13 )
+    dmpi = lr_513 + ( tmp5 - dpt5 ) - ( tmp13 - dpt13 )
 
     return dmpi
 
@@ -3972,7 +3985,7 @@ def hmi(prof):
     dpt670 = interp.dwpt(prof, 670)
     lr_86 = lapse_rate(prof, 850, 670, pres=True)
 
-    hmi = lr_86 - ( tmp850 - dpt850 ) - ( tmp670 - dpt670 )
+    hmi = lr_86 + ( tmp850 - dpt850 ) - ( tmp670 - dpt670 )
 
     return hmi
 
@@ -4024,7 +4037,7 @@ def mdpi(prof):
     upr_pres = sfc_pres - 150.
     
     layer_idxs_low = ma.where(prof.pres >= upr_pres)[0]
-    layer_idxs_high = ma.where(650 >= 500)[0]
+    layer_idxs_high = ma.where(650 >= prof.pres, prof.pres >= 500)[0]
     min_thetae = ma.min(prof.thetae[layer_idxs_high])
     max_thetae = ma.max(prof.thetae[layer_idxs_low])
 
@@ -4167,9 +4180,10 @@ def tsi(prof, pcl, hbot, htop, stu=0, stv=0):
 
     wmax_c = winds.max_wind(prof, 0, 25000, all=False)
     wmax = utils.mag(wmax_c[0], wmax_c[1], missing=MISSING)
-    srh = winds.helicity(prof, hbot, htop, stu = prof.srwind[0], stv = prof.srwind[1])[0]
+    srwind = bunkers_storm_motion(prof)
+    srh = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
     ehis = getattr(prof, 'ehi', ehi(prof, pcl, hbot, htop, stu=0, stv=0))
-    sspd = utils.mag(prof.srwind[0], prof.srwind[1], missing=MISSING)
+    sspd = utils.mag(srwind[0], srwind[1], missing=MISSING)
 
     tsi = 4.943709 - ( 0.000777 * pcl.bplus ) - ( 0.004005 * wmax ) + ( 0.181217 * ehis ) - ( 0.026867 * sspd ) - (0.006479 * srh )
 
@@ -4211,3 +4225,30 @@ def jli(prof):
     jli = ( -11.5 - dt68 ) + ( 2 * ( dt56 + 14.9 ) ) + (2 * ( dte89 + 3.5 ) ) - ( ( 3.0 + dte75 ) / 3 )
 
     return jli
+
+def ncape(prof, pcl):
+    '''
+        Normalized CAPE
+
+        NCAPE is CAPE that is devided by the depth of the buoyancy layer.  Values around
+        or less than 0.1 suggest a relatively "skinny" CAPE profile with relatively weak
+        parcel acceleration.  Values around 0.3 or above suggest a relatively "fat" CAPE
+        profile with large parcel accelerations possible.  Larger parcel accelerations
+        can likely lead to stronger, more sustained updrafts.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        ncape : number
+            NCAPE (number)
+    '''
+
+    buoy_depth = pcl.elhght - pcl.lfchght
+
+    ncape = pcl.bplus / buoy_depth
+
+    return ncape
