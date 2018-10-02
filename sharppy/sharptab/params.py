@@ -3426,10 +3426,9 @@ def jeff(prof):
 
     qw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
     tmp500 = interp.temp(prof, 500)
-    tmp700 = interp.temp(prof, 700)
-    dpt700 = interp.dwpt(prof, 700)
+    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
 
-    jeff = ( 1.6 * qw850 ) - tmp500 - ( 0.5 * (tmp700 - dpt700 ) ) - 8
+    jeff = ( 1.6 * qw850 ) - tmp500 - ( 0.5 * tdd700 ) - 8
 
     return jeff
 
@@ -3658,8 +3657,7 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
             Enhanced Energy Helicity Index (unitless)
     '''
 
-    tmpsfc = thermo.ctof(prof.tmpc[prof.sfc])
-    dptsfc = thermo.ctof(prof.dwpc[prof.sfc])
+    tsssfc = thermo.ctof(prof.tmpc[prof.sfc]) - thermo.ctof(prof.dwpc[prof.sfc])
     sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
 
     mlpcl = kwargs.get('mlpcl', None)
@@ -3667,9 +3665,9 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
         try:
             mlpcl = prof.mlpcl
         except:
-            mlpcl = parcelx(prof, flag=4)   
-
-    if sbcape > mlcape and mllcl < 1000 and tmpsfc - dptsfc <= 10:
+            mlpcl = parcelx(prof, flag=4)
+    
+    if sbcape > mlcape and mllcl < 1000 and tddsfc <= 10:
         capef = sbcape
         cape4 = sbpcl.b4km
     else:
@@ -3834,14 +3832,11 @@ def hi(prof):
             Humidity Index (number)
     '''
 
-    tmp850 = interp.temp(prof, 850)
-    dpt850 = interp.dwpt(prof, 850)
-    tmp700 = interp.temp(prof, 700)
-    dpt700 = interp.dwpt(prof, 700)
-    tmp500 = interp.temp(prof, 500)
-    dpt500 = interp.dwpt(prof, 500)
+    tdd850 = interp.temp(prof, 850) - interp.dwpt(prof, 850)
+    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
+    tdd500 = interp.temp(prof, 500) - interp.dwpt(prof, 500)
 
-    hi = ( tmp850 - dpt850 ) + ( tmp700 - dpt700 ) + ( tmp500 - dpt500 )
+    hi = tdd850 + tdd700 + tdd500
 
     return hi
 
@@ -3952,13 +3947,11 @@ def dmpi(prof):
     lvl13 = interp.to_msl(prof, utils.FT2M(13000))
     pres5 = interp.pres(prof, lvl5)
     pres13 = interp.pres(prof, lvl13)
-    tmp5 = interp.temp(prof, pres5)
-    dpt5 = interp.dwpt(prof, pres5)
-    tmp13 = interp.temp(prof, pres13)
-    dpt13 = interp.dwpt(prof, pres13)
+    tdd5 = interp.temp(prof, pres5) - interp.dwpt(prof, pres5)
+    tdd13 = interp.temp(prof, pres13) - interp.dwpt(prof, pres13)
     lr_513 = lapse_rate(prof, lvl5, lvl13, pres=False)
 
-    dmpi = lr_513 + ( tmp5 - dpt5 ) - ( tmp13 - dpt13 )
+    dmpi = lr_513 + tdd5 - tdd13
 
     return dmpi
 
@@ -3978,14 +3971,12 @@ def hmi(prof):
         hmi : number
             Hybrid Microburst Index
     '''
-
-    tmp850 = interp.temp(prof, 850)
-    dpt850 = interp.dwpt(prof, 850)
-    tmp670 = interp.temp(prof, 670)
-    dpt670 = interp.dwpt(prof, 670)
+    
+    tdd850 = interp.temp(prof, 850) - interp.dwpt(prof, 850)
+    tdd670 = interp.temp(prof, 670) - interp.dwpt(prof, 670)
     lr_86 = lapse_rate(prof, 850, 670, pres=True)
 
-    hmi = lr_86 + ( tmp850 - dpt850 ) - ( tmp670 - dpt670 )
+    hmi = lr_86 + tdd850 - tdd670
 
     return hmi
 
