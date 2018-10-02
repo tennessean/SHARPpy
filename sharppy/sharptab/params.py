@@ -4028,7 +4028,7 @@ def mdpi(prof):
     upr_pres = sfc_pres - 150.
     
     layer_idxs_low = ma.where(prof.pres >= upr_pres)[0]
-    layer_idxs_high = ma.where(650 >= prof.pres, prof.pres >= 500)[0]
+    layer_idxs_high = np.logical_and(650 >= prof.pres, prof.pres >= 500)
     min_thetae = ma.min(prof.thetae[layer_idxs_high])
     max_thetae = ma.max(prof.thetae[layer_idxs_low])
 
