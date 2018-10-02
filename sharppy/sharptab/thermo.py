@@ -8,7 +8,7 @@ from sharppy.sharptab.constants import *
 __all__ = ['drylift', 'thalvl', 'lcltemp', 'theta', 'wobf']
 __all__ += ['satlift', 'wetlift', 'lifted', 'vappres', 'mixratio']
 __all__ += ['temp_at_mixrat', 'wetbulb', 'thetaw', 'thetae']
-__all__ += ['virtemp', 'relh']
+__all__ += ['virtemp', 'relh', 'tdd']
 __all__ += ['ftoc', 'ctof', 'ctok', 'ktoc', 'ftok', 'ktof']
 
 
@@ -200,6 +200,25 @@ def relh(p, t, td):
     '''
     return 100. * mixratio(p, td) / mixratio(p, t)
 
+def tdd(p, t, td):
+    '''
+    Returns the dewpoint depression (C) of a parcel.
+
+    Parameters
+    ----------
+    p : number
+        The pressure of the parcel (hPa)
+    t : number
+        Temperature of the parcel (C)
+    td : number
+        Dew point of parcel (C)
+
+    Returns
+    -------
+    Dewpoint depression (C)
+    '''
+
+    return interp.temp(prof, p) - interp.dwpt(prof, p)
 
 def wobf(t):
     '''
