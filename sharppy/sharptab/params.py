@@ -3657,7 +3657,7 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
             Enhanced Energy Helicity Index (unitless)
     '''
 
-    tsssfc = thermo.ctof(prof.tmpc[prof.sfc]) - thermo.ctof(prof.dwpc[prof.sfc])
+    tddsfc = thermo.ctof(prof.tmpc[prof.sfc]) - thermo.ctof(prof.dwpc[prof.sfc])
     sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
 
     mlpcl = kwargs.get('mlpcl', None)
