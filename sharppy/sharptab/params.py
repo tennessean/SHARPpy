@@ -3102,7 +3102,7 @@ def spot(prof):
     dwpf = thermo.ctof(dwpc_sfc)
 
     # Calculate altimeter setting
-    asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** 0.1901631 ) * (( 0.0065 * sfc_hght ) / 288.15))) ** ( 1 / 0.1901631 )) # Calculate altimeter setting in mb
+    asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** (501800000/2637400451) ) * (( 0.0065 * sfc_hght ) / 288.15))) ** (2637400451/501800000)) # Calculate altimeter setting in mb
     asi = asm * 15200/514731 # Translate altimeter setting from mb to inHg
 
     # Ambient temperature factor
