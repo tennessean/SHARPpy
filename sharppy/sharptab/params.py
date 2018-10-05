@@ -19,6 +19,7 @@ __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
 __all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape']
+__all__ += ['cpst1', 'cpst2', 'cpst3']
 
 class DefineParcel(object):
     '''
@@ -507,8 +508,6 @@ def stp_cin(mlcape, esrh, ebwd, mllcl, mlcinh):
 
     stp_cin = np.maximum(cape_term * eshr_term * ebwd_term * lcl_term * cinh_term, 0)
     return stp_cin
-
-
 
 def stp_fixed(sbcape, sblcl, srh01, bwd6):
     '''
@@ -4243,3 +4242,131 @@ def ncape(prof, pcl):
     ncape = pcl.bplus / buoy_depth
 
     return ncape
+
+def cpst1(prof, mlcape, bwd6, srh03, mlcinh):
+    '''
+        Conditional Probability of a Significant Tornado, Equation 1
+
+        This equation is one of three that were derived in Togstead et. al., Weather and
+        Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
+        equations that could help assess the probability of the occurrence of significant
+        tornadoes (i.e. tornadoes rated EF2 or higher on the Enhanced Fujita (EF) scale).
+
+        This equation makes use of mixed-layer CAPE, 0-6 km bulk shear, 0-3 km storm-relative
+        helicity, and mixed-layer CIN.
+        
+        Parameters
+        ----------
+        prof : Profile object
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        bwd6 : 0-6 km bulk shear (m/s)
+        srh03 : 0-3 km storm-relative helicity (m2/s2)
+        mlcinh : mixed-layer convective inhibition (J/kg)
+
+        Returns
+        -------
+        cpst1 : percent
+            Conditional Probability of a Significant Tornado, Eq. 1 (percent)
+    '''
+
+    # Normalization values taken from the original paper.
+    mlcape_n = 40.7
+    bwd6_n = 23.4
+    srh03_n = 164.8
+    mlcinh_n = 58.1
+
+    # f(x) in the original paper.
+    reg = -4.69 + ( 2.98 * ( mlcape_n * ( mlcape ** 0.5 ) * bwd6_n * bwd6 ) ) + ( 1.67 * srh03_n * srh03 ) + ( 1.82 * mlcinh_n * mlcinh )
+
+    # P in the original paper.
+    cpst1 = 1 / ( 1 + np.exp(-reg) )
+
+    return cpst1
+
+def cpst2(prof, mlcape, bwd6, bwd1, mlcinh):
+    '''
+        Conditional Probability of a Significant Tornado, Equation 2
+
+        This equation is one of three that were derived in Togstead et. al., Weather and
+        Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
+        equations that could help assess the probability of the occurrence of significant
+        tornadoes (i.e. tornadoes rated EF2 or higher on the Enhanced Fujita (EF) scale).
+
+        This equation makes use of mixed-layer CAPE, 0-6 km bulk shear, 0-1 km bulk shear,
+        and mixed-layer CIN.
+
+        Parameters
+        ----------
+        prof : Profile object
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        bwd6 : 0-6 km bulk wind difference (m/s)
+        bwd1 : 0-1 km bulk wind difference (m/s)
+        mlcinh : mixed-layer convective inhibition (J/kg)
+
+        Returns
+        -------
+        cpst2 : percent
+            Conditional Probability of a Significant Tornado, Eq. 2 (percent)
+    '''
+
+    # Normalization values taken from the original paper.
+    mlcape_n = 40.7
+    bwd6_n = 23.4
+    bwd1_n = 11.0
+    mlcinh_n = 58.1
+
+    # f(x) in the original paper.
+    reg = -5.67 + ( 3.11 * ( mlcape_n * ( mlcape ** 0.5 ) * bwd6_n * bwd6 ) ) + ( 2.23 * bwd1_n * bwd1 ) + ( 1.38 * mlcinh_n * mlcinh )
+
+    # P in the original paper.
+    cpst2 = 1 / ( 1 + np.exp(-reg) )
+
+    return cpst2
+
+def cpst3(prof, mlcape, bwd6, bwd1, mllcl, mlcinh):
+    '''
+        Conditional Probability of a Significant Tornado, Equation 3
+
+        This equation is one of three that were derived in Togstead et. al., Weather and
+        Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
+        equations that could help assess the probability of the occurrence of significant
+        tornadoes (i.e. tornadoes rated EF2 or higher on the Enhanced Fujita (EF) scale).
+
+        This equation makes use of mixed-layer CAPE, 0-6 km bulk shear, 0-1 km bulk shear,
+        mixed-layer LCL, and mixed-layer CIN.
+
+        The original paper states that, out the three conditional probability equations
+        derived, this one has the lowest chi square score.  This is due to the fact that,
+        outside of very high LCL heights (i.e. near or above 2000 m AGL), LCL is less
+        discriminatory of tornadic vs. nontornadic environments than the other components
+        that were used in this and the other equations.
+
+        Parameters
+        ----------
+        prof : Profile object
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        bwd6 : 0-6 km bulk wind difference (m/s)
+        bwd1 : 0-1 km bulk wind difference (m/s)
+        mllcl : mixed-layer lifted condensation level (m)
+        mlcinh : mixed-layer convective inhibition (J/kg)
+
+        Returns
+        -------
+        cpst2 : percent
+            Conditional Probability of a Significant Tornado, Eq. 3 (percent)
+    '''
+
+    # Normalization values taken from the original paper.
+    mlcape_n = 40.7
+    bwd6_n = 23.4
+    bwd1_n = 11.0
+    mllcl_n = 1170.0
+    mlcinh_n = 58.1
+
+    # f(x) in the original paper.
+    reg = -4.73 + ( 3.21 * ( mlcape_n * ( mlcape ** 0.5 ) * bwd6_n * bwd6 ) ) + ( 0.78 * ( ( bwd1_n * bwd1 ) / ( mllcl_n * mllcl ) ) ) + ( 1.06 * mlcinh_n * mlcinh )
+
+    # P in the original paper.
+    cpst3 = 1 / ( 1 + np.exp(-reg) )
+
+    return cpst3
