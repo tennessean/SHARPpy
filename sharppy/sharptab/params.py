@@ -4276,7 +4276,7 @@ def cpst1(prof, mlcape, bwd6, srh03, mlcinh):
     mlcinh_n = 58.1
 
     # f(x) in the original paper.
-    reg = -4.69 + ( 2.98 * ( mlcape_n * ( mlcape ** 0.5 ) * bwd6_n * bwd6 ) ) + ( 1.67 * srh03_n * srh03 ) + ( 1.82 * mlcinh_n * mlcinh )
+    reg = -4.69 + ( 2.98 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 1.67  * ( srh03 / srh03_n ) ) + ( 1.82 * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
     cpst1 = 1 / ( 1 + np.exp(-reg) )
@@ -4316,7 +4316,7 @@ def cpst2(prof, mlcape, bwd6, bwd1, mlcinh):
     mlcinh_n = 58.1
 
     # f(x) in the original paper.
-    reg = -5.67 + ( 3.11 * ( mlcape_n * ( mlcape ** 0.5 ) * bwd6_n * bwd6 ) ) + ( 2.23 * bwd1_n * bwd1 ) + ( 1.38 * mlcinh_n * mlcinh )
+    reg = -5.67 + ( 3.11 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 2.23  * ( bwd1 / bwd1_n ) ) + ( 1.38  * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
     cpst2 = 1 / ( 1 + np.exp(-reg) )
@@ -4364,7 +4364,7 @@ def cpst3(prof, mlcape, bwd6, bwd1, mllcl, mlcinh):
     mlcinh_n = 58.1
 
     # f(x) in the original paper.
-    reg = -4.73 + ( 3.21 * ( mlcape_n * ( mlcape ** 0.5 ) * bwd6_n * bwd6 ) ) + ( 0.78 * ( ( bwd1_n * bwd1 ) / ( mllcl_n * mllcl ) ) ) + ( 1.06 * mlcinh_n * mlcinh )
+    reg = -4.73 + ( 3.21 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 0.78 * ( ( bwd1 / bwd1_n ) / ( mllcl / mllcl_n ) ) ) + ( 1.06 * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
     cpst3 = 1 / ( 1 + np.exp(-reg) )
