@@ -3696,7 +3696,7 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     
     return eehi
 
-def vtp(prof, pcl, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
+def vtp(mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
     '''
         Violent Tornado Parameter
 
@@ -4243,7 +4243,7 @@ def ncape(prof, pcl):
 
     return ncape
 
-def cpst1(prof, mlcape, bwd6, srh03, mlcinh):
+def cpst1(mlcape, bwd6, srh03, mlcinh):
     '''
         Conditional Probability of a Significant Tornado, Equation 1
 
@@ -4257,7 +4257,6 @@ def cpst1(prof, mlcape, bwd6, srh03, mlcinh):
         
         Parameters
         ----------
-        prof : Profile object
         mlcape : Mixed-layer CAPE from the parcel class (J/kg)
         bwd6 : 0-6 km bulk shear (m/s)
         srh03 : 0-3 km storm-relative helicity (m2/s2)
@@ -4279,11 +4278,11 @@ def cpst1(prof, mlcape, bwd6, srh03, mlcinh):
     reg = -4.69 + ( 2.98 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 1.67  * ( srh03 / srh03_n ) ) + ( 1.82 * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
-    cpst1 = 1 / ( 1 + np.exp(-reg) )
+    cpst1 = 100 / ( 1 + np.exp(-reg) )
 
     return cpst1
 
-def cpst2(prof, mlcape, bwd6, bwd1, mlcinh):
+def cpst2(mlcape, bwd6, bwd1, mlcinh):
     '''
         Conditional Probability of a Significant Tornado, Equation 2
 
@@ -4297,7 +4296,6 @@ def cpst2(prof, mlcape, bwd6, bwd1, mlcinh):
 
         Parameters
         ----------
-        prof : Profile object
         mlcape : Mixed-layer CAPE from the parcel class (J/kg)
         bwd6 : 0-6 km bulk wind difference (m/s)
         bwd1 : 0-1 km bulk wind difference (m/s)
@@ -4319,11 +4317,11 @@ def cpst2(prof, mlcape, bwd6, bwd1, mlcinh):
     reg = -5.67 + ( 3.11 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 2.23  * ( bwd1 / bwd1_n ) ) + ( 1.38  * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
-    cpst2 = 1 / ( 1 + np.exp(-reg) )
+    cpst2 = 100 / ( 1 + np.exp(-reg) )
 
     return cpst2
 
-def cpst3(prof, mlcape, bwd6, bwd1, mllcl, mlcinh):
+def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
     '''
         Conditional Probability of a Significant Tornado, Equation 3
 
@@ -4343,7 +4341,6 @@ def cpst3(prof, mlcape, bwd6, bwd1, mllcl, mlcinh):
 
         Parameters
         ----------
-        prof : Profile object
         mlcape : Mixed-layer CAPE from the parcel class (J/kg)
         bwd6 : 0-6 km bulk wind difference (m/s)
         bwd1 : 0-1 km bulk wind difference (m/s)
@@ -4367,6 +4364,6 @@ def cpst3(prof, mlcape, bwd6, bwd1, mllcl, mlcinh):
     reg = -4.73 + ( 3.21 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 0.78 * ( ( bwd1 / bwd1_n ) / ( mllcl / mllcl_n ) ) ) + ( 1.06 * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
-    cpst3 = 1 / ( 1 + np.exp(-reg) )
+    cpst3 = 100 / ( 1 + np.exp(-reg) )
 
     return cpst3
