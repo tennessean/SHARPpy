@@ -3696,7 +3696,7 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     
     return eehi
 
-def vtp(mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
+def vtp(prof, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
     '''
         Violent Tornado Parameter
 
@@ -3709,6 +3709,7 @@ def vtp(mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
 
         Parameters
         ----------
+        prof : Profile object
         mlcape : Mixed-layer CAPE from the parcel class (J/kg)
         esrh : effective storm relative helicity (m2/s2)
         ebwd : effective bulk wind difference (m/s)
