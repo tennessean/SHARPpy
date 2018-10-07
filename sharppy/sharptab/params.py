@@ -16,7 +16,7 @@ __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb'
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
-__all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi']
+__all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi', 'ulii', 'ssi']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
@@ -550,8 +550,6 @@ def stp_fixed(sbcape, sblcl, srh01, bwd6):
     stp_fixed = cape_term * lcl_term * srh_term * bwd6_term
    
     return stp_fixed
-
-
 
 def scp(mucape, srh, ebwd):
     '''
@@ -3610,7 +3608,7 @@ def ei(prof):
 
     return ei
 
-def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
+def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     '''
         Enhanced Energy Helicity Index
 
@@ -3648,6 +3646,7 @@ def eehi(prof, pcl, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
         sbcape : Surface based CAPE from the parcel class (J/kg)
         sblcl : Surface based lifted condensation level (m)
         mllcl : Mixed-layer lifted condensation level (m)
+        srh01 : 0-1 km storm-relative helicity (m2/s2)
         bwd6 : Bulk wind difference between 0 to 6 km (m/s)
 
         Returns
@@ -4036,6 +4035,65 @@ def mdpi(prof):
 
     return mdpi
 
+def ulii(prof):
+    '''
+        Upper Level Instability Index
+
+        This index was developed as part of a method for computing wind gusts produced by
+        high-based thunderstorms, typically in the Rocky Mountains region.  It makes use of
+        the 400-mb ambient temperature, the 300-mb ambient temperature, and a parcel lifted
+        from the 500 mb level to both the 400 and 300-mb levels.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        ulii : number
+            Upper Level Instability Index (number)
+    '''
+
+    tmp500 = interp.temp(prof, 500)
+    dpt500 = interp.dwpt(prof, 500)
+    t_pcl54 = thermo.lifted(500, tmp500, dpt500, 400)
+    t_pcl53 = thermo.lifted(500, tmp500, dpt500, 300)    
+
+    ulii = ( t_pcl54 - tmp500 ) + ( t_pcl53 - tmp500 )
+
+    return ulii
+
+def ssi(prof):
+    '''
+        Showalter Stability Index
+
+        This index, one of the first forecasting indices ever constructed, lifts a parcel
+        from 850 mb to 500 mb, then compares it with the ambient temperature (similar to
+        the lifted index).  It does not work well in mountainous areas, and cannot be used
+        when the 850 mb level is below ground.  The SSI was devised by Albert Showalter in
+        1947.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        ssi : number
+            Showalter Stability Index (number)
+    '''
+
+    tmp850 = interp.temp(prof, 850)
+    dpt850 = interp.dwpt(prof, 850)
+    vtp500 = interp.vtmp(prof, 500)
+
+    t_pcl85 = thermo.lifted(850, tmp850, dpt850, 500)
+    vt_pcl85 = thermo.virtemp(500, t_pcl85, t_pcl85)
+
+    ssi = vtp500 - vt_pcl85
+
+    return ssi
+
 def fsi(prof):
     '''
         Fog Stability Index
@@ -4169,7 +4227,8 @@ def tsi(prof, pcl, hbot, htop, stu=0, stv=0):
             Thunderstorm Severity Index (number)
     '''
 
-    wmax_c = winds.max_wind(prof, 0, 25000, all=False)
+    hght_t = interp.to_agl(prof, prof.hght[prof.top])
+    wmax_c = winds.max_wind(prof, 0, hght_t, all=False)
     wmax = utils.mag(wmax_c[0], wmax_c[1], missing=MISSING)
     srwind = bunkers_storm_motion(prof)
     srh = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
