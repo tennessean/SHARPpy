@@ -98,7 +98,7 @@ def theta(p, t, p2=1000.):
         Temperature of the parcel (C)
     p2 : number, numpy array (default 1000.)
         Reference pressure level (hPa)
-
+    
     Returns
     -------
     Potential temperature (C)
