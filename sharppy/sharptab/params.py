@@ -3702,7 +3702,7 @@ def vtp(prof, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
         From Hampshire et. al. 2017, JOM page 8.
 
         Research using observed soundings found that 0-3 km CAPE and 0-3 km lapse rate were notable
-        discriminators of violent tornado environments (verses weak and/or significant tornado environments).
+        discriminators of violent tornado environments (versus weak and/or significant tornado environments).
         These parameters were combined into the effective layer version of the Significant Tornado Parameter
         (STP) to create the Violent Tornado Parameter (VTP).
 
