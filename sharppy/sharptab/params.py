@@ -16,7 +16,7 @@ __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb'
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
-__all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi', 'ulii', 'ssi']
+__all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
@@ -3672,7 +3672,7 @@ def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
         capef = mlcape
         cape4 = mlpcl.b4km
     
-    wmax4 = 2 * ( cape4 ** 0.5 )
+    wmax4 = ( 2 * cape4 ) ** 0.5
 
     if bwd6 > 30:
         srh6f = 1.5
@@ -4073,6 +4073,9 @@ def ssi(prof):
         when the 850 mb level is below ground.  The SSI was devised by Albert Showalter in
         1947.
 
+        The version used here makes use of the virtual temperature correction, much like the
+        lifted indices in this program.
+
         Parameters
         ----------
         prof : Profile object
@@ -4093,6 +4096,69 @@ def ssi(prof):
     ssi = vtp500 - vt_pcl85
 
     return ssi
+
+def swiss00(prof):
+    '''
+        Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (SWISS00)
+
+       This index is one of two versions of a forecasting index that was developed for use in forecasting
+       thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
+       developed for forecasting nocturnal thunderstorms using soundings taken around 00z.  It makes use
+       of the Showalter Index, the 3-6 km AGL wind shear, and the dewpoint depression at the 600 mb level.
+
+       Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        swiss00 : number
+            Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (number)
+    '''
+
+    si850 = getattr(prof, 'ssi', ssi(prof))
+    p3km, p6km = interp.pres(prof, interp.to_msl(prof, np.array([3000., 6000.])))
+    ws36 = winds.wind_shear(prof, pbot=p3km, ptop=p6km)
+    ws36 = utils.mag(ws36[0], ws36[1])
+    ws36 = utils.KTS2MS(ws36)
+    tdd600 = interp.temp(prof, 600) - interp.dwpt(prof, 600)
+
+    swiss00 = si850 + ( 0.4 * ws36 ) + ( tdd600 / 10 )
+
+    return swiss00
+
+def swiss12(prof):
+    '''
+        Stability and Wind Shear index for thunderstorms in Switzerland, 12z version (SWISS00)
+
+       This index is one of two versions of a forecasting index that was developed for use in forecasting
+       thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
+       developed for forecasting nocturnal thunderstorms using soundings taken around 12z.  It makes use
+       of the Surface-based Lifted Index, the 0-3 km AGL wind shear, and the dewpoint depression at the
+       650 mb level.
+
+       Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        swiss12 : number
+            Stability and Wind Shear index for thunderstorms in Switzerland, 12z version (number)
+    '''
+
+    sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
+    sli = sbpcl.li5
+    p_sfc = prof.pres[prof.sfc]
+    p3km = interp.pres(prof, interp.to_msl(prof, 3000))
+    ws03 = winds.wind_shear(prof, pbot=p_sfc, ptop=p3km)
+    ws03 = utils.mag(ws03[0], ws03[1])
+    ws03 = utils.KTS2MS(ws03)
+    tdd650 = interp.temp(prof, 650) - interp.dwpt(prof, 650)
+
+    swiss12 = sli - ( 0.3 * ws03 ) + (0.3 * tdd650 )
+
+    return swiss12
 
 def fsi(prof):
     '''
