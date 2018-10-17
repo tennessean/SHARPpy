@@ -16,9 +16,9 @@ __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb'
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
-__all__ += ['windex', 'wmsi', 'dmpi', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
+__all__ += ['windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'ncape']
+__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'mcsi1', 'mcsi2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
 
 class DefineParcel(object):
@@ -3296,8 +3296,11 @@ def pii(prof):
 
         This index relates potential instability in the middle atmosphere with
         thickness.  It was proposed by A. J. Van Delden in 2001.  Positive values
-        indicate increased potential for convective weather.  The units are in
-        degrees Kelvin per meter (K/m).
+        indicate increased potential for convective weather.
+        
+        The units in the original formulation are in degrees Kelvin per meter (K/m);
+        however, this formulation will use degrees Kelvin per kilometer (K/km) so as
+        to make the values easier to read.
 
         Parameters
         ----------
@@ -3314,7 +3317,9 @@ def pii(prof):
     z500 = interp.hght(prof, 500)
     z925 = interp.hght(prof, 925)
 
-    pii = ( te925 - te500 ) / ( z500 - z925 )
+    th95 = ( z500 - z925 ) / 1000
+
+    pii = ( te925 - te500 ) / th95
 
     return pii
 
@@ -3322,8 +3327,8 @@ def ko(prof):
     '''
         KO Index
 
-        This index was developed by Swedish meteorologists and used heavily
-        by the Deutsche Wetterdienst.  It compares values of equivalent potential
+        This index was developed by Swedish meteorologists and used heavily by the
+        Deutsche Wetterdienst.  It compares values of equivalent potential
         temperature at different levels.  It was developed by T. Andersson, M.
         Andersson, C. Jacobsson, and S. Nilsson.
 
@@ -3759,6 +3764,7 @@ def vtp(prof, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
         cape3_term = mlpcl.b3km / 50
 
     vtp = np.maximum(cape_term * eshr_term * ebwd_term * lcl_term * cinh_term * cape3_term * lr03_term, 0)
+
     return vtp
 
 def snsq(prof):
@@ -3921,16 +3927,19 @@ def wmsi(prof, **kwargs):
 
     return wmsi
 
-def dmpi(prof):
+def dmpi1(prof):
     '''
-        Dry Microburst Potential Index
+        Dry Microburst Potential Index, version 1
 
         This index was primarily derived by R. Wakimoto in 1985 to forecast potential for
-        dry microbursts.  The original index, calculated using soundings in the region of
-        Denver, CO, used the 700 and 500 mb layers for its calculations.  However, the
-        RAOB Program manual recommends the use of the 5,000 and 13,000-ft AGL layers
-        so that the results can be consistently used for any worldwide sounding,
-        regardless of station elevation.  This version is what will be used here.
+        dry microbursts.
+        
+        The original index, calculated using soundings in the region of Denver, CO, used
+        the 700 and 500 mb layers for its calculations.  However, the RAOB Program manual
+        recommends the use of the 5,000 and 13,000-ft AGL layers so that the results can
+        be consistently used for any worldwide sounding, regardless of station elevation.
+        The decision was made to split the index into two versions, the original (version
+        1) and the RAOB (version 2).
 
         Parameters
         ----------
@@ -3938,8 +3947,41 @@ def dmpi(prof):
 
         Returns
         -------
-        dmpi : number
-            Dry Microburst Potential Index (number)
+        dmpi1 : number
+            Dry Microburst Potential Index, version 1 (number)
+    '''
+
+    
+    tdd500 = interp.temp(prof, 500) - interp.dwpt(prof, 500)
+    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
+    lr75 = lapse_rate(prof, 700, 500, pres=True)
+
+    dmpi1 = lr75 + tdd700 - tdd500
+
+    return dmpi1
+
+def dmpi2(prof):
+    '''
+        Dry Microburst Potential Index, version 2
+
+        This index was primarily derived by R. Wakimoto in 1985 to forecast potential for
+        dry microbursts.
+        
+        The original index, calculated using soundings in the region of Denver, CO, used
+        the 700 and 500 mb layers for its calculations.  However, the RAOB Program manual
+        recommends the use of the 5,000 and 13,000-ft AGL layers so that the results can
+        be consistently used for any worldwide sounding, regardless of station elevation.
+        The decision was made to split the index into two versions, the original (version
+        1) and the RAOB (version 2).
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        dmpi2 : number
+            Dry Microburst Potential Index, version 2 (number)
     '''
 
     lvl5 = interp.to_msl(prof, utils.FT2M(5000))
@@ -3950,9 +3992,9 @@ def dmpi(prof):
     tdd13 = interp.temp(prof, pres13) - interp.dwpt(prof, pres13)
     lr_513 = lapse_rate(prof, lvl5, lvl13, pres=False)
 
-    dmpi = lr_513 + tdd5 - tdd13
+    dmpi2 = lr_513 + tdd5 - tdd13
 
-    return dmpi
+    return dmpi2
 
 def hmi(prof):
     '''
@@ -4369,9 +4411,191 @@ def ncape(prof, pcl):
 
     return ncape
 
+def mcsi1(prof, lat=35, **kwargs):
+    '''
+        MCS Index, version 1
+
+        Formulation taken from Jirak and Cotton 2007, WAF 22 page 825.
+
+        The MCS Index was originally derived by I. Jirak and W. Cotton in 2007 as an attempt
+        to determine the likelihood that convection will develop into a mesoscale convective
+        system (MCS).  It makes use of the most-unstable Lifted Index, 0-3 km AGL bulk shear,
+        and temperature advection at the 700 mb level.
+
+        In WAF 24 pages 351-355, Bunkers warned that the results produced by the original
+        equation (version 1) could be strongly biased in gridded datasets by the temperature
+        advection term.  In response, in WAF 24 pages 356-360, Jirak and Cotton created a
+        second version (version 2) that rebalanced the equation so as to reduce the biasing.
+
+        MCSI values on below -1.5 are considered unfavorable for MCS development; between -1.5
+        and 0 are considered marginal; between 0 and 3 are considered favorable; and values
+        exceeding 3 are considered very favorable.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        mcsi1 : number
+            MCS Index, version 1 (number)
+    '''
+
+    # Calculate LI
+    mupcl = kwargs.get('mupcl', None)
+    if not mupcl:
+        try:
+            mupcl = prof.mupcl
+        except:
+            mulplvals = DefineParcel(prof, flag=3, pres=300)
+            mupcl = cape(prof, lplvals=mulplvals)
+    muli = mupcl.li5
+
+    # Calculate shear
+    mag03_shr = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear))
+
+    # Calculate 700 mb temperature advection
+    omega = (2. * np.pi) / (86164.)
+    b_pr = 750 # Pressure of bottom of layer
+    m_pr = 700 # Pressure of middle of layer
+    t_pr = 650 # Pressure of top of layer
+    m_tmp = thermo.ctok(interp.temp(prof, m_pr)) # Temperature of middle of layer (Kelvin)
+    b_ht = interp.hght(prof, b_pr) # Height ASL of bottom of layer (meters)
+    t_ht = interp.hght(prof, t_pr) # Height ASL of top of layer (meters)
+    b_wdir = interp.vec(prof, b_pr)[0] # Wind direction at bottom of layer (degrees from north)
+    t_wdir = interp.vec(prof, t_pr)[0] # Wind direction at top of layer (degrees from north)
+    m_wspd = utils.KTS2MS(interp.vec(prof, m_pr)[1]) # Wind speed at middle of layer (meters/second)
+
+    if utils.QC(lat):
+        f = 2. * omega * np.sin(np.radians(lat)) # Units: (s**-1)
+    else:
+        t7_adv = np.nan
+        return mcsi1
+    
+    multiplier = (f / 9.81) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
+    
+    # Calculate change in wind direction with height; this will help determine whether advection is warm or cold
+    mod = 180 - b_wdir
+    t_wdir = t_wdir + mod
+        
+    if t_wdir < 0:
+        t_wdir = t_wdir + 360
+    elif t_wdir >= 360:
+        t_wdir = t_wdir - 360
+    d_theta = t_wdir - 180.
+
+    # Here we calculate t_adv (which is -V_g * del(T) or the local change in temperature term)
+    # K/s  s * rad/m * deg   m^2/s^2          K        degrees / m
+    t7_adv = multiplier * np.power(m_wspd,2) * m_tmp * (d_theta / (t_ht - b_ht)) # Units: Kelvin / seconds 
+
+    # Calculate LI term
+    li_term = -( muli + 4.4 ) / 3.3
+
+    # Calculate shear term
+    shr_term = ( mag03_shr - 11.5 ) / 5
+
+    # Calculate advection term
+    adv_term = ( t7_adv - 4.5e-5 ) / 7.3e-5
+
+    # Calculate equation
+    mcsi1 = li_term + shr_term + adv_term
+
+    return mcsi1
+
+def mcsi2(prof, lat=35, **kwargs):
+    '''
+        MCS Index, version 2
+
+        Formulation taken from Jirak and Cotton 2009, WAF 24 page 359.
+
+        The MCS Index was originally derived by I. Jirak and W. Cotton in 2007 as an attempt
+        to determine the likelihood that convection will develop into a mesoscale convective
+        system (MCS).  It makes use of the most-unstable Lifted Index, 0-3 km AGL bulk shear,
+        and temperature advection at the 700 mb level.
+
+        In WAF 24 pages 351-355, Bunkers warned that the results produced by the original
+        equation (version 1) could be strongly biased in gridded datasets by the temperature
+        advection term.  In response, in WAF 24 pages 356-360, Jirak and Cotton created a
+        second version (version 2) that rebalanced the equation so as to reduce the biasing.
+
+        MCSI values on below -1.5 are considered unfavorable for MCS development; between -1.5
+        and 0 are considered marginal; between 0 and 3 are considered favorable; and values
+        exceeding 3 are considered very favorable.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        mcsi2 : number
+            MCS Index, version 2 (number)
+    '''
+
+    # Calculate LI
+    mupcl = kwargs.get('mupcl', None)
+    if not mupcl:
+        try:
+            mupcl = prof.mupcl
+        except:
+            mulplvals = DefineParcel(prof, flag=3, pres=300)
+            mupcl = cape(prof, lplvals=mulplvals)
+    muli = mupcl.li5
+
+    # Calculate shear
+    mag03_shr = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear))
+
+    # Calculate 700 mb temperature advection
+    omega = (2. * np.pi) / (86164.)
+    b_pr = 750 # Pressure of bottom of layer
+    m_pr = 700 # Pressure of middle of layer
+    t_pr = 650 # Pressure of top of layer
+    m_tmp = thermo.ctok(interp.temp(prof, m_pr)) # Temperature of middle of layer (Kelvin)
+    b_ht = interp.hght(prof, b_pr) # Height ASL of bottom of layer (meters)
+    t_ht = interp.hght(prof, t_pr) # Height ASL of top of layer (meters)
+    b_wdir = interp.vec(prof, b_pr)[0] # Wind direction at bottom of layer (degrees from north)
+    t_wdir = interp.vec(prof, t_pr)[0] # Wind direction at top of layer (degrees from north)
+    m_wspd = utils.KTS2MS(interp.vec(prof, m_pr)[1]) # Wind speed at middle of layer (meters/second)
+
+    if utils.QC(lat):
+        f = 2. * omega * np.sin(np.radians(lat)) # Units: (s**-1)
+    else:
+        t7_adv = np.nan
+        return mcsi1
+    
+    multiplier = (f / 9.81) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
+    
+    # Calculate change in wind direction with height; this will help determine whether advection is warm or cold
+    mod = 180 - b_wdir
+    t_wdir = t_wdir + mod
+        
+    if t_wdir < 0:
+        t_wdir = t_wdir + 360
+    elif t_wdir >= 360:
+        t_wdir = t_wdir - 360
+    d_theta = t_wdir - 180.
+
+    # Here we calculate t_adv (which is -V_g * del(T) or the local change in temperature term)
+    # K/s  s * rad/m * deg   m^2/s^2          K        degrees / m
+    t7_adv = multiplier * np.power(m_wspd,2) * m_tmp * (d_theta / (t_ht - b_ht)) # Units: Kelvin / seconds 
+
+    # Calculate LI term
+    li_term = -( muli + 4.4 ) / 3.3
+
+    # Calculate shear term
+    shr_term = ( mag03_shr - 11.5 ) / 4.1
+
+    # Calculate advection term
+    adv_term = ( t7_adv - 4.5e-5 ) / 1.6e-4
+
+    # Calculate equation
+    mcsi2 = li_term + shr_term + adv_term
+
+    return mcsi2
+
 def cpst1(mlcape, bwd6, srh03, mlcinh):
     '''
-        Conditional Probability of a Significant Tornado, Equation 1
+        Conditional Probability of a Significant Tornado, version 1
 
         This equation is one of three that were derived in Togstead et. al., Weather and
         Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
@@ -4391,7 +4615,7 @@ def cpst1(mlcape, bwd6, srh03, mlcinh):
         Returns
         -------
         cpst1 : percent
-            Conditional Probability of a Significant Tornado, Eq. 1 (percent)
+            Conditional Probability of a Significant Tornado, version 1 (percent)
     '''
 
     # Normalization values taken from the original paper.
@@ -4410,7 +4634,7 @@ def cpst1(mlcape, bwd6, srh03, mlcinh):
 
 def cpst2(mlcape, bwd6, bwd1, mlcinh):
     '''
-        Conditional Probability of a Significant Tornado, Equation 2
+        Conditional Probability of a Significant Tornado, version 2
 
         This equation is one of three that were derived in Togstead et. al., Weather and
         Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
@@ -4430,7 +4654,7 @@ def cpst2(mlcape, bwd6, bwd1, mlcinh):
         Returns
         -------
         cpst2 : percent
-            Conditional Probability of a Significant Tornado, Eq. 2 (percent)
+            Conditional Probability of a Significant Tornado, version 2 (percent)
     '''
 
     # Normalization values taken from the original paper.
@@ -4449,7 +4673,7 @@ def cpst2(mlcape, bwd6, bwd1, mlcinh):
 
 def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
     '''
-        Conditional Probability of a Significant Tornado, Equation 3
+        Conditional Probability of a Significant Tornado, version 3
 
         This equation is one of three that were derived in Togstead et. al., Weather and
         Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
@@ -4475,8 +4699,8 @@ def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
 
         Returns
         -------
-        cpst2 : percent
-            Conditional Probability of a Significant Tornado, Eq. 3 (percent)
+        cpst3 : percent
+            Conditional Probability of a Significant Tornado, version 3 (percent)
     '''
 
     # Normalization values taken from the original paper.
