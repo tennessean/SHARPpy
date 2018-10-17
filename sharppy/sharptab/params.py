@@ -18,7 +18,7 @@ __all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'bra
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
 __all__ += ['windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'mcsi1', 'mcsi2']
+__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'mcsi1', 'mcsi2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
 
 class DefineParcel(object):
@@ -2377,9 +2377,7 @@ def sherb(prof, **kwargs):
     lr75 = lapse_rate(prof, 700, 500, pres=True)
 
     if effective == False:
-        p3km = interp.pres(prof, interp.to_msl(prof, 3000))
-        sfc_pres = prof.pres[prof.get_sfc()]
-        shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
+        shear = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear))
         sherb = ( shear / 26. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
     else:
         if hasattr(prof, 'ebwd'):
@@ -3434,12 +3432,12 @@ def jeff(prof):
 
     return jeff
 
-def esi(prof, pcl):
+def esi(prof, sbcape):
     '''
         Energy Shear Index
 
-        This index, proposed as a way of parameterizing updraft duration, multiplies CAPE by
-        1.5-6 km MSL mean vertical shear magnitude in m/s.  A 2002 study by Brimelow and Reuter
+        This index, proposed as a way of parameterizing updraft duration, multiplies SBCAPE by
+        850 mb-6 km AGL mean vertical shear magnitude in m/s.  A 2002 study by Brimelow and Reuter
         indicated considerable success with using this index to forecast large hail.  An ESI
         value approaching 5 is considered favorable for large hail, with values above 5 not
         having much further significance.
@@ -3447,7 +3445,7 @@ def esi(prof, pcl):
         Parameters
         ----------
         prof : Profile object
-        pcl : Parcel object
+        sbcape : Surface-based Convective Available Potential Energy (J/kg)
 
         Returns
         -------
@@ -3455,12 +3453,11 @@ def esi(prof, pcl):
             Energy Shear Index (unitless)
     '''
 
-    p15km, p6km = interp.pres(prof, np.array([1500., 6000.]))
-    msl_15_6km_shr = winds.wind_shear(prof, pbot=p15km, ptop=p6km)
-    msl_15_6km_shr = utils.mag(msl_15_6km_shr[0], msl_15_6km_shr[1])
-    shr156 = utils.KTS2MS(msl_15_6km_shr) / 1000
+    p6km = interp.pres(prof, interp.to_msl(prof, 6000))
+    shr_850_6km = winds.wind_shear(prof, pbot=850, ptop=p6km)
+    shr_850_6km = utils.KTS2MS(utils.mag(*shr_850_6km)) / ( 6000 - interp.to_agl(prof, interp.hght(prof, 850)) )
 
-    esi = shr156 * pcl.bplus
+    esi = shr_850_6km * sbcape
 
     return esi
 
@@ -3493,14 +3490,13 @@ def vgp(prof, pcl, **kwargs):
 
     if not sfc3shr:
         try:
-            sfc_6km_shear = prof.sfc_3km_shear
+            sfc_3km_shear = prof.sfc_3km_shear
         except:
             sfc_pres = prof.pres[prof.sfc]
             p3km = interp.pres(prof, interp.to_msl(prof, 3000.))
             sfc_3km_shear = winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)
     
-    sfc_3km_shear = utils.mag(sfc_3km_shear[0], sfc_3km_shear[1])
-    shr03 = utils.KTS2MS(sfc_3km_shear)
+    shr03 = utils.KTS2MS(utils.mag(*sfc_3km_shear))
     mag03_shr = shr03 / 3000
 
     vgp = mag03_shr * ( pcl.bplus ** 0.5 )
@@ -4388,10 +4384,10 @@ def ncape(prof, pcl):
     '''
         Normalized CAPE
 
-        NCAPE is CAPE that is devided by the depth of the buoyancy layer.  Values around
-        or less than 0.1 suggest a relatively "skinny" CAPE profile with relatively weak
-        parcel acceleration.  Values around 0.3 or above suggest a relatively "fat" CAPE
-        profile with large parcel accelerations possible.  Larger parcel accelerations
+        NCAPE is CAPE that is divided by the depth of the positive-buoyancy layer.  Values
+        around or less than 0.1 suggest a relatively "skinny" CAPE profile with relatively
+        weak parcel acceleration.  Values around 0.3 or above suggest a relatively "fat"
+        CAPE profile with large parcel accelerations possible.  Larger parcel accelerations
         can likely lead to stronger, more sustained updrafts.
 
         Parameters
@@ -4405,11 +4401,38 @@ def ncape(prof, pcl):
             NCAPE (number)
     '''
 
-    buoy_depth = pcl.elhght - pcl.lfchght
+    p_buoy_depth = pcl.elhght - pcl.lfchght
 
-    ncape = pcl.bplus / buoy_depth
+    ncape = pcl.bplus / p_buoy_depth
 
     return ncape
+
+def ncinh(prof,pcl):
+    '''
+        Normalized CINH
+
+        NCINH is CINH that is divided by the depth of the negative-buoyancy layer.  Values
+        around or greater than -0.01 suggest a relatively "skinny" CINH profile that only
+        requires relatively weak parcel acceleration to overcome the cap.  Values around 
+        -0.03 or below suggest a relatively "fat" CINH profile with large parcel accelerations
+        required to overcome the cap.
+
+        Parameters
+        ----------
+        prof : Profile object
+        pcl : Parcel object
+
+        Returns
+        -------
+        ncinh : number
+            NCINH (number)
+    '''
+
+    n_buoy_depth = pcl.lfchght - prof.hght[prof.sfc]
+
+    ncinh = pcl.bminus / n_buoy_depth
+
+    return ncinh
 
 def mcsi1(prof, lat=35, **kwargs):
     '''
