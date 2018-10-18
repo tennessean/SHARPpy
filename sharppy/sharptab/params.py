@@ -18,7 +18,7 @@ __all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'bra
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
 __all__ += ['windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'mcsi1', 'mcsi2']
+__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
 
 class DefineParcel(object):
@@ -3598,8 +3598,8 @@ def ei(prof):
     mxr850 = thermo.mixratio(850, interp.dwpt(prof, 850))
 
     # Calculate moist static energy in joules/kilogram
-    mse5_j = ( 1004 * tmp500 ) + ( G * hght500 ) + ( 2500 * mxr500 )
-    mse8_j = ( 1004 * tmp850 ) + ( G * hght850 ) + ( 2500 * mxr850 )
+    mse5_j = ( 1004.6851 * tmp500 ) + ( G * hght500 ) + ( 2500 * mxr500 )
+    mse8_j = ( 1004.6851 * tmp850 ) + ( G * hght850 ) + ( 2500 * mxr850 )
 
     # Convert moist static energy to calories/gram
     mse5_c = mse5_j / 4186.8
@@ -4615,6 +4615,62 @@ def mcsi2(prof, lat=35, **kwargs):
     mcsi2 = li_term + shr_term + adv_term
 
     return mcsi2
+
+def cii1(prof):
+    '''
+        Convective Instability Index, version 1
+
+        This index was developed by W. D. Bonner, R. M. Reap, and J. E. Kemper in 1971.  It uses
+        the equivalent potential temperature (Theta-e) at the surface, 850 mb, and 700 mb levels.
+        Values <= 0 are indicative of convective instability and perhaps potential storm development.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        cii1 : number
+            Convective Instability Index, version 1 (number)
+    '''
+
+    te_sfc = prof.thetae[prof.sfc]
+    te850 = interp.thetae(prof, 850)
+    te700 = interp.thetae(prof, 700)
+
+    te_s8 = ( te_sfc + te850 ) / 2
+
+    cii1 = te700 - te_s8
+
+    return cii1
+
+def cii2(prof):
+    '''
+        Convective Instability Index, version 2
+
+        This index was derived by D. A. Barber in 1975.  It subtracts the average Theta-e value in
+        the 600-500 mb layer from the average Theta-e value in the lowest 100 mb.  Values >= 0
+        indicate likely convective instability.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        cii2 : number
+            Convective Instability Index, version 2 (number)
+    '''
+
+    sfc_pres = prof.pres[prof.sfc]
+    top_pres = sfc_pres - 100
+
+    te_low100 = mean_thetae(prof, pbot=sfc_pres, ptop=top_pres)
+    te65 = mean_thetae(prof, pbot=600, ptop=500)
+
+    cii2 = te_low100 - te65
+
+    return cii2
 
 def cpst1(mlcape, bwd6, srh03, mlcinh):
     '''
