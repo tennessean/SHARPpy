@@ -15,8 +15,9 @@ __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_sev
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
-__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp', 'snsq', 'hi']
-__all__ += ['windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
+__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
+__all__ += ['snsq', 'snow']
+__all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
@@ -3813,6 +3814,35 @@ def snsq(prof):
         snsq = relhf * thetaef * mwf
     
     return snsq
+
+def snow(prof):
+    '''
+        Snow Index
+
+        This index uses two thickness layers: the 850-700 mb thickness layer and the 1000-850 mb thickness
+        layer.  A value of greater than 4179 indicates liquid precipitation; a value of 4179 indicates
+        mixed precipitation; and a value of less than 4179 indicates solid precipitation.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        snow : number
+            Snow Index (number)
+    '''
+
+    hght1000 = interp.hght(prof, 1000)
+    hght850 = interp.hght(prof, 850)
+    hght700 = interp.hght(prof, 700)
+
+    thick87 = hght850 - hght700
+    thick18 = hght1000 - hght850
+
+    snow = thick87 + ( 2 * thick18 )
+
+    return snow
 
 def hi(prof):
     '''
