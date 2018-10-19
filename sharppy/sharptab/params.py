@@ -14,7 +14,7 @@ __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
-__all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff']
+__all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
@@ -3433,6 +3433,28 @@ def jeff(prof):
 
     return jeff
 
+def sc_totals(prof):
+    '''
+        Surface-based Cross Totals
+
+        This index, developed by J. Davies in 1988, is a modification of the Cross Totals index that
+        replaces the 850 mb dewpoint with the surface dewpoint.  As such, this index will usually
+        give a higher value than the original Cross Totals.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        sc_totals : number
+            Surface-based Cross Totals (number)
+    '''
+
+    sc_totals = prof.dwpc[prof.sfc] - interp.temp(prof, 500)
+
+    return sc_totals
+
 def esi(prof, sbcape):
     '''
         Energy Shear Index
@@ -3837,10 +3859,10 @@ def snow(prof):
     hght850 = interp.hght(prof, 850)
     hght700 = interp.hght(prof, 700)
 
-    thick87 = hght850 - hght700
+    thick78 = hght700 - hght850
     thick18 = hght1000 - hght850
 
-    snow = thick87 + ( 2 * thick18 )
+    snow = thick78 + ( 2 * thick18 )
 
     return snow
 
