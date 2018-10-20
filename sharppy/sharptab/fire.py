@@ -1,5 +1,12 @@
-from sharppy.sharptab import thermo, utils
+'''Fire Parameter Routines'''
+from __future__ import division
+from sharppy.sharptab import thermo, utils, winds, interp
 import numpy as np
+import numpy.ma as ma
+from sharppy.sharptab.constants import *
+
+
+__all__ = ['fosberg', 'haines_la', 'haines_ma', 'haines_ha', 'cbi']
 
 ## Routines implemented in Python by Greg Blumberg - CIMMS and Kelton Halbert (OU SoM)
 ## wblumberg@ou.edu, greg.blumberg@noaa.gov, kelton.halbert@noaa.gov, keltonhalbert@ou.edu
@@ -34,7 +41,7 @@ def fosberg(prof):
 
         Returns
         -------
-        param - the Fosberg Fire Weather Index
+        fosberg - the Fosberg Fire Weather Index
 
     '''
     tmpf = thermo.ctof(prof.tmpc[prof.get_sfc()])
@@ -52,6 +59,176 @@ def fosberg(prof):
     u_sq = fmph*fmph
     fmdc = 1 - 2*em30 + 1.5*em30*em30 - 0.5*em30*em30*em30
 
-    param = (fmdc*np.sqrt(1+u_sq))/0.3002
+    fosberg = (fmdc*np.sqrt(1+u_sq))/0.3002
 
-    return param
+    return fosberg
+
+def haines_la(prof):
+    '''
+        Haines Index, Low Altitude
+
+        The Haines Index (or Lower Atmospheric Severity Index) was developed in order to help forecast fire "blow up"
+        potential.  It is a function of lower atmospheric stability and moisture content.  Three versions were
+        developed, to be used depending on the altitude of the surface.  Values of 2 or 3 indicate very low "blow up"
+        potential; a value of 4 indicates low potential; a value of 5 indicates moderate potential; and a value of
+        6 indicates high potential.
+
+        The low altitude version was developed primarily for use when the surface level pressure is 950 mb or higher.
+
+        Parameters
+        ----------
+        prof - Profile object
+
+        Returns
+        -------
+        haines_la : number
+            Haines Index, Low Altitude (number)
+    '''
+
+    tmp950 = interp.temp(prof, 950)
+    tmp850 = interp.temp(prof, 850)
+    dpt850 = interp.dwpt(prof, 850)
+
+    lr98 = tmp950 - tmp850
+    tdd850 = tmp850 - dpt850
+
+    if lr98 <= 3:
+        stab_tm = 1
+    elif 3 < lr98 and lr98 < 8:
+        stab_tm = 2
+    else:
+        stab_tm = 3
+    
+    if tdd850 <= 5:
+        mois_tm = 1
+    elif 5 < tdd850 and tdd850 < 10:
+        mois_tm = 2
+    else:
+        mois_tm = 3
+    
+    haines_la = stab_tm + mois_tm
+
+    return haines_la
+
+def haines_ma(prof):
+    '''
+        Haines Index, Middle Altitude
+
+        The Haines Index (or Lower Atmospheric Severity Index) was developed in order to help forecast fire "blow up"
+        potential.  It is a function of lower atmospheric stability and moisture content.  Three versions were
+        developed, to be used depending on the altitude of the surface.  Values of 2 or 3 indicate very low "blow up"
+        potential; a value of 4 indicates low potential; a value of 5 indicates moderate potential; and a value of
+        6 indicates high potential.
+
+        The middle altitude version was developed primarily for use when the surface level pressure is between 950
+        and 850 mb.
+
+        Parameters
+        ----------
+        prof - Profile object
+
+        Returns
+        -------
+        haines_ma : number
+            Haines Index, Middle Altitude (number)
+    '''
+
+    tmp850 = interp.temp(prof, 850)
+    tmp700 = interp.temp(prof, 700)
+    dpt850 = interp.dwpt(prof, 850)
+
+    lr87 = tmp850 - tmp700
+    tdd850 = tmp850 - dpt850
+
+    if lr87 <= 5:
+        stab_tm = 1
+    elif 5 < lr87 and lr87 < 11:
+        stab_tm = 2
+    else:
+        stab_tm = 3
+    
+    if tdd850 <= 5:
+        mois_tm = 1
+    elif 5 < tdd850 and tdd850 < 13:
+        mois_tm = 2
+    else:
+        mois_tm = 3
+    
+    haines_ma = stab_tm + mois_tm
+
+    return haines_ma
+
+def haines_ha(prof):
+    '''
+        Haines Index, High Altitude
+
+        The Haines Index (or Lower Atmospheric Severity Index) was developed in order to help forecast fire "blow up"
+        potential.  It is a function of lower atmospheric stability and moisture content.  Three versions were
+        developed, to be used depending on the altitude of the surface.  Values of 2 or 3 indicate very low "blow up"
+        potential; a value of 4 indicates low potential; a value of 5 indicates moderate potential; and a value of
+        6 indicates high potential.
+
+        The low altitude version was developed primarily for use when the surface level pressure is between 850 and
+        700 mb.
+
+        Parameters
+        ----------
+        prof - Profile object
+
+        Returns
+        -------
+        haines_ha : number
+            Haines Index, High Altitude (number)
+    '''
+
+    tmp700 = interp.temp(prof, 700)
+    tmp500 = interp.temp(prof, 500)
+    dpt700 = interp.dwpt(prof, 700)
+
+    lr75 = tmp700 - tmp500
+    tdd700 = tmp700 - dpt700
+
+    if lr75 <= 17:
+        stab_tm = 1
+    elif 17 < lr75 and lr75 < 22:
+        stab_tm = 2
+    else:
+        stab_tm = 3
+    
+    if tdd700 <= 14:
+        mois_tm = 1
+    elif 14 < tdd700 and tdd700 < 21:
+        mois_tm = 2
+    else:
+        mois_tm = 3
+    
+    haines_ha = stab_tm + mois_tm
+
+    return haines_ha
+
+def cbi(prof):
+    '''
+        Chandler Burning Index
+
+        This index uses air temperature and relative humidity to create a numerical index of fire danger.
+        It is based solely on weather conditions, with no adjustment for fuel moisture.  Values of less
+        than 50 indicate low fire danger; Values between 50 and 75 indicate moderate fire danger; values
+        between 75 and 90 indicate high fire danger; values between 90 and 97.5 indicate very high fire
+        danger; and values above 97.5 indicate extreme fire danger.
+
+        Parameters
+        ----------
+        prof - Profile object
+
+        Returns
+        -------
+        cbi : number
+            Chandler Burning Index (number)
+    '''
+
+    sfc_tmp = prof.tmpc[prof.sfc]
+    sfc_rh = thermo.relh(prof.pres[prof.sfc], prof.tmpc[prof.sfc], prof.dwpc[prof.sfc])
+
+    cbi = ((( 110 - (1.373 * sfc_rh)) - (0.54 * (10.2 - sfc_tmp))) * (124 * (10 ** (-0.0142 * sfc_rh)))) / 60
+
+    return cbi
