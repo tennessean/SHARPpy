@@ -14,7 +14,7 @@ __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
-__all__ += ['spot', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
+__all__ += ['spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
@@ -3151,6 +3151,60 @@ def spot(prof):
     spot = taf + tdf + asf + wvf
 
     return spot
+
+def wbz(prof):
+    '''
+        Wetbulb Zero height
+
+        The wetbulb zero (WBZ) height identifies the height in feet  AGL at which the
+        wetbulb temperature equals 0 degrees C.  It is assumed that hailstones above 
+        this level do not melt, as even if the ambient temperature is above freezing,
+        evaporation would absorb latent heat, chilling the hailstones.  However, if
+        the wetbulb temperature is above 0, hailstones will melt as they fall.
+
+        A WBZ height of less than 6,000 feet is usually associated with a relatively
+        cool airmass with low CAPE, making it unlikely for large hail to form
+        (although there have been occasional instances of large hail falling in areas
+        of low WBZ).  A WBZ height of over 12,000 feet suggests that a hailstone will
+        fall through a very deep column of warm air over an extended period of time,
+        and will likely melt substantially or even completely by the time it reaches
+        the ground.
+
+        WBZ heights of between 6,000 and 12,000 feet are usually considered to be a 
+        "sweet spot" of sorts for hail to form, with heights in the 7,000-9,000 foot
+        range being most associated with large hail.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        wbz : feet
+            Wetbulb Zero (feet AGL)
+    '''
+
+    wetbulb = getattr(prof, 'wetbulb', prof.get_wetbulb_profile())
+    ind1 = ma.where(wetbulb >= 0)[0]
+    ind2 = ma.where(wetbulb <= 0)[0]
+    if len(ind1) == 0 or len(ind2) == 0:
+        wbp = ma.masked
+    inds = np.intersect1d(ind1, ind2)
+    if len(inds) > 0:
+        wbp = prof.pres[inds][0]
+    diff1 = ind1[1:] - ind1[:-1]
+    ind = np.where(diff1 > 1)[0] + 1
+    try:
+        ind = ind.min()
+    except:
+        ind = ind1[-1]
+    
+    wbp = np.power(10, np.interp(0, [wetbulb[ind+1], wetbulb[ind]],
+            [prof.logp[ind+1], prof.logp[ind]]))
+    
+    wbz = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbp)))
+    
+    return wbz
 
 def thomp(prof, pcl):
     '''
