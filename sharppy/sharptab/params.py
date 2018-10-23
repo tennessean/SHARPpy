@@ -17,7 +17,7 @@ __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
-__all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12']
+__all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
@@ -2963,8 +2963,7 @@ def ehi(prof, pcl, hbot, htop, stu=0, stv=0):
             Energy Helicity Index (unitless)
     '''
 
-    srwind = bunkers_storm_motion(prof)
-    helicity = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
+    helicity = winds.helicity(prof, hbot, htop, stu = stu, stv = stv)[0]
     ehi = (helicity * pcl.bplus) / 160000.
 
     return ehi
@@ -3531,10 +3530,10 @@ def esi(prof, sbcape):
     '''
 
     p6km = interp.pres(prof, interp.to_msl(prof, 6000))
-    shr_850_6km = winds.wind_shear(prof, pbot=850, ptop=p6km)
-    shr_850_6km = utils.KTS2MS(utils.mag(*shr_850_6km)) / ( 6000 - interp.to_agl(prof, interp.hght(prof, 850)) )
+    shr_850mb_6km = winds.wind_shear(prof, pbot=850, ptop=p6km)
+    shr_850mb_6km = utils.KTS2MS(utils.mag(*shr_850mb_6km)) / ( 6000 - interp.to_agl(prof, interp.hght(prof, 850)) )
 
-    esi = shr_850_6km * sbcape
+    esi = shr_850mb_6km * sbcape
 
     return esi
 
@@ -4245,12 +4244,12 @@ def swiss00(prof):
     '''
         Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (SWISS00)
 
-       This index is one of two versions of a forecasting index that was developed for use in forecasting
-       thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
-       developed for forecasting nocturnal thunderstorms using soundings taken around 00z.  It makes use
-       of the Showalter Index, the 3-6 km AGL wind shear, and the dewpoint depression at the 600 mb level.
+        This index is one of two versions of a forecasting index that was developed for use in forecasting
+        thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
+        developed for forecasting nocturnal thunderstorms using soundings taken around 00z.  It makes use
+        of the Showalter Index, the 3-6 km AGL wind shear, and the dewpoint depression at the 600 mb level.
 
-       Parameters
+        Parameters
         ----------
         prof : Profile object
 
@@ -4262,9 +4261,7 @@ def swiss00(prof):
 
     si850 = getattr(prof, 'ssi', ssi(prof))
     p3km, p6km = interp.pres(prof, interp.to_msl(prof, np.array([3000., 6000.])))
-    ws36 = winds.wind_shear(prof, pbot=p3km, ptop=p6km)
-    ws36 = utils.mag(ws36[0], ws36[1])
-    ws36 = utils.KTS2MS(ws36)
+    ws36 = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p3km, ptop=p6km)))
     tdd600 = interp.temp(prof, 600) - interp.dwpt(prof, 600)
 
     swiss00 = si850 + ( 0.4 * ws36 ) + ( tdd600 / 10 )
@@ -4275,13 +4272,13 @@ def swiss12(prof):
     '''
         Stability and Wind Shear index for thunderstorms in Switzerland, 12z version (SWISS00)
 
-       This index is one of two versions of a forecasting index that was developed for use in forecasting
-       thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
-       developed for forecasting nocturnal thunderstorms using soundings taken around 12z.  It makes use
-       of the Surface-based Lifted Index, the 0-3 km AGL wind shear, and the dewpoint depression at the
-       650 mb level.
+        This index is one of two versions of a forecasting index that was developed for use in forecasting
+        thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
+        developed for forecasting nocturnal thunderstorms using soundings taken around 12z.  It makes use
+        of the Surface-based Lifted Index, the 0-3 km AGL wind shear, and the dewpoint depression at the
+        650 mb level.
 
-       Parameters
+        Parameters
         ----------
         prof : Profile object
 
@@ -4295,14 +4292,145 @@ def swiss12(prof):
     sli = sbpcl.li5
     p_sfc = prof.pres[prof.sfc]
     p3km = interp.pres(prof, interp.to_msl(prof, 3000))
-    ws03 = winds.wind_shear(prof, pbot=p_sfc, ptop=p3km)
-    ws03 = utils.mag(ws03[0], ws03[1])
-    ws03 = utils.KTS2MS(ws03)
+    ws03 = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p_sfc, ptop=p3km)))
     tdd650 = interp.temp(prof, 650) - interp.dwpt(prof, 650)
 
-    swiss12 = sli - ( 0.3 * ws03 ) + (0.3 * tdd650 )
+    swiss12 = sli - ( 0.3 * ws03 ) + ( 0.3 * tdd650 )
 
     return swiss12
+
+def fin(prof, **kwargs):
+    '''
+        FIN Index
+
+        Formulation taken from Ukkonen et. al. 2017, JAMC 56 pg. 2349
+
+        This index is a modified version of the SWISS12 Index (q.v.) that makes use of the Most Unstable
+        Lifted Index, the 700 mb dewpoint depression, and the wind shear between 10 meters AGL and 750 mb.
+        Negative values indicate favorable instability and shear for thunderstorm development.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        fin : number
+            FIN Index (number)        
+    '''
+    
+    # Calculate MULI
+    mupcl = kwargs.get('mupcl', None)
+    if not mupcl:
+        try:
+            mupcl = prof.mupcl
+        except:
+            mulplvals = DefineParcel(prof, flag=3, pres=300)
+            mupcl = cape(prof, lplvals=mulplvals)
+    muli = mupcl.li5
+
+    # Calculate 700 mb dewpoint depression
+    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
+
+    # Calculate 10-m AGL-750 mb shear
+    p10m = interp.pres(prof, interp.to_msl(prof, 10))
+    ws_10m_750mb = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p10m, ptop=750)))
+
+    fin = muli + ( tdd700 / 10 ) - ( ws_10m_750mb / 10 )
+
+    return fin
+
+def yon1(prof):
+    '''
+        Yonetani Index, version 1
+
+        This index, derived by T. Yonetani in 1979, was developed to help forecast thunderstorms
+        over the Kanto Plains region of Japan.  It makes use of the environmental lapse rates at
+        the 900-850 mb and 850-500 mb levels, the average relative humidity of the 900-850 mb
+        level, and the moist adiabatic lapse rate of the ambient air temperature at 850 mb.
+        Positive values indicate a likely chance for thunderstorms.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        yon1 : number
+            Yonetani Index, version 1 (number)
+    '''
+
+    lr98 = lapse_rate(prof, 900, 850, pres=True)
+    lr85 = lapse_rate(prof, 850, 500, pres=True)
+    rh98 = mean_relh(prof, 900, 850) / 100
+
+    # Calculate moist adiabatic lapse rate at the ambient temperature at 850 mb
+    tmp850c = interp.temp(prof, 850)
+    tmp850k = thermo.ctok(tmp850c)
+    mxr850 = thermo.mixratio(850, tmp850c) / 1000
+    cp_m = 1.0046851 * ( 1 + ( 1.84 * mxr850 ) )
+    gocp = G / cp_m
+    lvocp = 2.5e6 / cp_m
+    lvord = 1680875 / 193
+    eps = 0.62197
+    num = 1 + ( lvord * ( mxr850 / tmp850k ) )
+    denom = 1 + ( lvocp * lvord * ( ( mxr850 * eps ) / ( tmp850k ** 2 ) ) )
+    malr850 = gocp * ( num / denom )
+
+    if rh98 > 0.57:
+        final_term = 15
+    else:
+        final_term = 16.5
+    
+    yon1 = ( 0.966 * lr98 ) + ( 2.41 * ( lr85 - malr850 ) ) + ( 9.66 * rh98 ) - final_term
+
+    return yon1
+
+def yon2(prof):
+    '''
+        Yonetani Index, version 2
+
+        This index is a modification of the original Yonetani Index that was developed in an effort
+        to better predict thunderstorms over the island of Cyprus (see Jacovides and Yonetani 1990,
+        WAF v.5 pgs. 559-569).  It makes use of the same variables as the original index, but the
+        weighing factors are rearrainged.  Positive values indicate a likely chance for
+        thunderstorms.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        yon2 : number
+            Yonetani Index, version 2 (number)
+    '''
+
+    lr98 = lapse_rate(prof, 900, 850, pres=True)
+    lr85 = lapse_rate(prof, 850, 500, pres=True)
+    rh98 = mean_relh(prof, 900, 850) / 100
+
+    # Calculate moist adiabatic lapse rate at the ambient temperature at 850 mb
+    tmp850c = interp.temp(prof, 850)
+    tmp850k = thermo.ctok(tmp850c)
+    mxr850 = thermo.mixratio(850, tmp850c) / 1000
+    cp_m = 1.0046851 * ( 1 + ( 1.84 * mxr850 ) )
+    gocp = G / cp_m
+    lvocp = 2.5e6 / cp_m
+    lvord = 1680875 / 193
+    eps = 0.62197
+    num = 1 + ( lvord * ( mxr850 / tmp850k ) )
+    denom = 1 + ( lvocp * lvord * ( ( mxr850 * eps ) / ( tmp850k ** 2 ) ) )
+    malr850 = gocp * ( num / denom )
+
+    if rh98 > 0.50:
+        final_term = 13
+    else:
+        final_term = 14.5
+    
+    yon2 = ( 0.964 * lr98 ) + ( 2.46 * ( lr85 - malr850 ) ) + ( 9.64 * rh98 ) - final_term
+
+    return yon2
 
 def fsi(prof):
     '''
