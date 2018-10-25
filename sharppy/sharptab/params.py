@@ -8,7 +8,7 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaw', 'mean_relh']
+__all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
@@ -19,7 +19,7 @@ __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
+__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
 
 class DefineParcel(object):
@@ -1054,6 +1054,57 @@ def mean_thetae(prof, pbot=None, ptop=None, dp=-1, exact=False):
         thtae = ma.average(thetae, weights=p)
     return thtae
 
+def mean_thetaes(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Calculates the mean theta-es from a profile object within the
+        specified layer.
+        
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default 400 hPa)
+        Pressure of the top level (hPa)
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        Mean Theta-ES
+        
+        '''
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.sfc] - 100.
+    if not utils.QC(interp.temp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.temp(prof, ptop)): return ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        thetaes1 = thermo.thetaes(pbot, interp.temp(prof, pbot))
+        thetaes2 = thermo.thetaes(ptop, interp.temp(prof, ptop))
+        thetaes = np.ma.empty(prof.pres[ind1:ind2+1].shape)
+        for i in np.arange(0, len(thetaes), 1):
+            thetaes[i] = thermo.thetaes(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i])
+        mask = ~thetaes.mask
+        thetaes = np.concatenate([[thetaes1], thetaes[mask], thetaes[mask], [thetaes2]])
+        tott = thetaes.sum() / 2.
+        num = float(len(thetaes)) / 2.
+        thtaes = tott / num
+    else:
+        dp = -1
+        p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
+        temp = interp.temp(prof, p)
+        thetaes = np.empty(p.shape)
+        for i in np.arange(0, len(thetaes), 1):
+           thetaes[i] = thermo.thetaes(p[i], temp[i])
+        thtaes = ma.average(thetaes, weights=p)
+    return thtaes
+
 def mean_theta(prof, pbot=None, ptop=None, dp=-1, exact=False):
     '''
         Calculates the mean theta from a profile object within the
@@ -1150,6 +1201,57 @@ def mean_thetaw(prof, pbot=None, ptop=None, dp=-1, exact=False):
         thetaw = thermo.thetaw(p, temp, dwpt)
         thtaw = ma.average(thetaw, weights=p)
     return thtaw
+
+def mean_thetaws(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Calculates the mean theta-ws from a profile object within the
+        specified layer.
+        
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default 400 hPa)
+        Pressure of the top level (hPa)
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        Mean Theta-WS
+        
+        '''
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.sfc] - 100.
+    if not utils.QC(interp.temp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.temp(prof, ptop)): return ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        thetaws1 = thermo.thetaws(pbot, interp.temp(prof, pbot))
+        thetaws2 = thermo.thetaws(ptop, interp.temp(prof, ptop))
+        thetaws = np.ma.empty(prof.pres[ind1:ind2+1].shape)
+        for i in np.arange(0, len(thetaws), 1):
+            thetaws[i] = thermo.thetaws(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i])
+        mask = ~thetaws.mask
+        thetaws = np.concatenate([[thetaws1], thetaws[mask], thetaws[mask], [thetaws2]])
+        tott = thetaws.sum() / 2.
+        num = float(len(thetaws)) / 2.
+        thtaws = tott / num
+    else:
+        dp = -1
+        p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
+        temp = interp.temp(prof, p)
+        thetaws = np.empty(p.shape)
+        for i in np.arange(0, len(thetaws), 1):
+           thetaws[i] = thermo.thetaws(p[i], temp[i])
+        thtaws = ma.average(thetaws, weights=p)
+    return thtaws
 
 def lapse_rate(prof, lower, upper, pres=True):
     '''
@@ -3606,7 +3708,7 @@ def aded1(prof):
             Adedokun Index, version 1 (number)
     '''
 
-    pclm500 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    pclm500 = thermo.thetaws(500, interp.temp(prof, 500))
     thtw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
 
     aded1 = thtw850 - pclm500
@@ -3640,7 +3742,7 @@ def aded2(prof):
             Adedokun Index, version 2 (number)
     '''
 
-    pclm500 = thermo.wetlift(500, interp.temp(prof, 500), 1000)
+    pclm500 = thermo.thetaws(500, interp.temp(prof, 500))
     thtw_sfc = thermo.thetaw(prof.pres[prof.sfc], prof.tmpc[prof.sfc], prof.dwpc[prof.sfc])
 
     aded2 = thtw_sfc - pclm500
@@ -4530,7 +4632,7 @@ def mvv(prof, pcl):
             Maximum Vertical Velocity (meters/second)
     '''
 
-    mvv =  ( 2 * pcl.bplus ) ** 0.5
+    mvv = ( 2 * pcl.bplus ) ** 0.5
 
     return mvv
 
@@ -4568,10 +4670,9 @@ def tsi(prof, pcl, hbot, htop, stu=0, stv=0):
     hght_t = interp.to_agl(prof, prof.hght[prof.top])
     wmax_c = winds.max_wind(prof, 0, hght_t, all=False)
     wmax = utils.mag(wmax_c[0], wmax_c[1], missing=MISSING)
-    srwind = bunkers_storm_motion(prof)
-    srh = winds.helicity(prof, hbot, htop, stu = srwind[0], stv = srwind[1])[0]
-    ehis = getattr(prof, 'ehi', ehi(prof, pcl, hbot, htop, stu=0, stv=0))
-    sspd = utils.mag(srwind[0], srwind[1], missing=MISSING)
+    srh = winds.helicity(prof, hbot, htop, stu = stu, stv = stv)[0]
+    ehis = getattr(prof, 'ehi', ehi(prof, pcl, hbot, htop, stu = stu, stv = stv))
+    sspd = utils.mag(stu, stv, missing=MISSING)
 
     tsi = 4.943709 - ( 0.000777 * pcl.bplus ) - ( 0.004005 * wmax ) + ( 0.181217 * ehis ) - ( 0.026867 * sspd ) - (0.006479 * srh )
 
@@ -4641,7 +4742,7 @@ def ncape(prof, pcl):
 
     return ncape
 
-def ncinh(prof,pcl):
+def ncinh(prof, pcl):
     '''
         Normalized CINH
 
@@ -4662,17 +4763,60 @@ def ncinh(prof,pcl):
             NCINH (number)
     '''
 
-    n_buoy_depth = pcl.lfchght - prof.hght[prof.sfc]
+    n_buoy_depth = pcl.lfchght
 
     ncinh = pcl.bminus / n_buoy_depth
 
     return ncinh
 
+def lsi(prof):
+    '''
+        Lid Strength Index
+
+        Formulation taken from Carson et. al. 1980, BAMS v.61 pg. 1022.
+
+        The Lid Strength Index was originally derived as an analogue for the Lifted Index,
+        but as a way to measure the strength of the cap rather than stability.  It uses the
+        mean theta-w of the lowest 50 mb, the maximum theta-ws in the atmosphere below 500
+        mb, and the average theta-ws between the maximum theta-ws layer and 500 mb.
+        
+        Values below 1 indicate a very weak cap that would be easy to break; values between
+        1 and 2 indicate a cap that is just strong enough to suppress convection while still
+        being eventually breakable; and values above 2 indicate a very strong cap that is
+        unlikely to be broken.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        lsi : number
+            Lid Strength Index (number)
+    '''
+
+    sfc_pres = prof.pres[prof.sfc]
+    pres_50 = sfc_pres - 50
+    thetaws = getattr(prof, 'thetaws', prof.get_thetaws_profile())
+
+    thtw_lw = mean_thetaw(prof, sfc_pres, pres_50)
+
+    idx = ma.where(prof.pres >= 500)[0]
+    max_idx = np.ma.argmax(thetaws[idx])
+    max_thetaws = thetaws[idx][max_idx]
+    max_pres = prof.pres[idx][max_idx]
+
+    thtw_up = mean_thetaw(prof, max_pres, 500)
+
+    lsi = ( thtw_lw - thtw_up ) - ( max_thetaws - thtw_lw )
+
+    return lsi
+
 def mcsi1(prof, lat=35, **kwargs):
     '''
         MCS Index, version 1
 
-        Formulation taken from Jirak and Cotton 2007, WAF 22 page 825.
+        Formulation taken from Jirak and Cotton 2007, WAF v.22 pg. 825.
 
         The MCS Index was originally derived by I. Jirak and W. Cotton in 2007 as an attempt
         to determine the likelihood that convection will develop into a mesoscale convective
@@ -4681,7 +4825,7 @@ def mcsi1(prof, lat=35, **kwargs):
 
         In WAF 24 pages 351-355, Bunkers warned that the results produced by the original
         equation (version 1) could be strongly biased in gridded datasets by the temperature
-        advection term.  In response, in WAF 24 pages 356-360, Jirak and Cotton created a
+        advection term.  In response, in WAF v.24 pgs. 356-360, Jirak and Cotton created a
         second version (version 2) that rebalanced the equation so as to reduce the biasing.
 
         MCSI values on below -1.5 are considered unfavorable for MCS development; between -1.5
@@ -4763,7 +4907,7 @@ def mcsi2(prof, lat=35, **kwargs):
     '''
         MCS Index, version 2
 
-        Formulation taken from Jirak and Cotton 2009, WAF 24 page 359.
+        Formulation taken from Jirak and Cotton 2009, WAF v.24 pg. 359.
 
         The MCS Index was originally derived by I. Jirak and W. Cotton in 2007 as an attempt
         to determine the likelihood that convection will develop into a mesoscale convective
@@ -4772,7 +4916,7 @@ def mcsi2(prof, lat=35, **kwargs):
 
         In WAF 24 pages 351-355, Bunkers warned that the results produced by the original
         equation (version 1) could be strongly biased in gridded datasets by the temperature
-        advection term.  In response, in WAF 24 pages 356-360, Jirak and Cotton created a
+        advection term.  In response, in WAF v.24 pgs. 356-360, Jirak and Cotton created a
         second version (version 2) that rebalanced the equation so as to reduce the biasing.
 
         MCSI values on below -1.5 are considered unfavorable for MCS development; between -1.5

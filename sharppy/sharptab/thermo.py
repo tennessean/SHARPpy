@@ -7,8 +7,8 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['drylift', 'thalvl', 'lcltemp', 'theta', 'wobf']
 __all__ += ['satlift', 'wetlift', 'lifted', 'vappres', 'mixratio']
-__all__ += ['temp_at_mixrat', 'wetbulb', 'thetaw', 'thetae']
-__all__ += ['virtemp', 'relh']
+__all__ += ['temp_at_mixrat', 'wetbulb', 'thetaw', 'thetaws', 'thetae', 'thetaes']
+__all__ += ['thetad', 'thetads', 'thetav', 'virtemp', 'relh']
 __all__ += ['ftoc', 'ctof', 'ctok', 'ktoc', 'ftok', 'ktof']
 
 
@@ -129,6 +129,29 @@ def thetaw(p, t, td):
     return wetlift(p2, t2, 1000.)
 
 
+def thetaws(p, t):
+    '''
+    Returns the saturation wetbulb potential temperature (C) of
+    a parcel. Unlike wetbulb potential temperature, which is a
+    function of pressure, temperature, and dewpoint, Theta-ws is
+    a function of pressure and temperature only and assumes the
+    parcel is completely saturated at the start.
+
+    Parameters
+    ----------
+    p : number
+        The pressure of the parcel (hPa)
+    t : number
+        Temperature of the parcel (C)
+
+    Returns
+    -------
+    Saturation wetbulb porential temperature (C)
+
+    '''
+    return wetlift(p, t, 1000)
+
+
 def thetae(p, t, td):
     '''
     Returns the equivalent potential temperature (C) of a parcel.
@@ -149,6 +172,95 @@ def thetae(p, t, td):
     '''
     p2, t2 = drylift(p, t, td)
     return theta(100., wetlift(p2, t2, 100.), 1000.)
+
+
+def thetaes(p, t):
+    '''
+    Returns the saturation equivalent potential temperature (C)
+    of a parcel.  Unlike equivalent potential temperature, which
+    is a function of pressure, temperature, and dewpoint, Theta-es
+    is a function of pressure and temperature only and assumes the
+    parcel is completely saturated at the start.
+
+    Parameters
+    ----------
+    p : number
+        The pressure of the parcel (hPa)
+    t : number
+        Temperature of the parcel (C)
+
+    Returns
+    -------
+    Saturation equivalent porential temperature (C)
+
+    '''
+    return theta(100., wetlift(p, t, 100.), 1000.)
+
+
+def thetad(p, td):
+    '''
+    Returns the dewpoint potential temperature (C) of a parcel.
+
+    Parameters
+    ----------
+    p : number
+        The pressure of the parcel (hPa)
+    td : number
+        Dew point of parcel (C)
+
+    Returns
+    -------
+    Dewpoint potential temperature (C)
+
+    '''
+    mxr = mixratio(p, td)
+    return temp_at_mixrat(mxr, 1000)
+
+
+def thetads(p, t):
+    '''
+    Returns the saturation dewpoint potential temperature (C)
+    of a parcel.  This is a function of pressure and ambient
+    temperature and assumes that the parcel is completely
+    saturated at the start.
+
+    Parameters
+    ----------
+    p : number
+        The pressure of the parcel (hPa)
+    t : number
+        Temperature of the parcel (C)
+
+    Returns
+    -------
+    Saturation dewpoint potential temperature (C)
+
+    '''
+    mxr = mixratio(p, t)
+    return temp_at_mixrat(mxr, 1000)
+
+
+def thetav(p, t, td):
+    '''
+    Returns the virtual potential temperature (C) of a parcel.
+    If td is masked, then it returns the temperature passed to
+    the function.
+
+    Parameters
+    ----------
+    p : number
+        The pressure of the parcel (hPa)
+    t : number
+        Temperature of the parcel (C)
+    td : number
+        Dew point of parcel (C)
+
+    Returns
+    -------
+    Virtual potential Temperature (C)
+
+    '''
+    return theta(p, virtemp(p, t, td), 1000)
 
 
 def virtemp(p, t, td):
@@ -182,7 +294,7 @@ def virtemp(p, t, td):
 
 def relh(p, t, td):
     '''
-    Returns the virtual temperature (C) of a parcel.
+    Returns the relative humidity (%) of a parcel.
 
     Parameters
     ----------

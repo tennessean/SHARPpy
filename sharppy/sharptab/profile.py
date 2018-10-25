@@ -384,6 +384,44 @@ class BasicProfile(Profile):
         theta = thermo.ctok(theta)
         return theta
     
+    def get_thetaw_profile(self):
+        '''
+            Function to calculate the theta-e profile.
+            
+            Parameters
+            ----------
+            None
+            
+            Returns
+            -------
+            Array of theta-e profile
+            '''
+        thetaw = ma.empty(self.pres.shape[0])
+        for i in range(len(self.v)):
+            thetaw[i] = thermo.thetaw(self.pres[i], self.tmpc[i], self.dwpc[i])
+        thetaw[thetaw == self.missing] = ma.masked
+        thetaw.set_fill_value(self.missing)
+        return thetaw
+    
+    def get_thetaws_profile(self):
+        '''
+            Function to calculate the theta-ws profile.
+            
+            Parameters
+            ----------
+            None
+            
+            Returns
+            -------
+            Array of theta-ws profile
+            '''
+        thetaws = ma.empty(self.pres.shape[0])
+        for i in range(len(self.v)):
+            thetaws[i] = thermo.thetaws(self.pres[i], self.tmpc[i])
+        thetaws[thetaws == self.missing] = ma.masked
+        thetaws.set_fill_value(self.missing)
+        return thetaws
+    
     def get_thetae_profile(self):
         '''
             Function to calculate the theta-e profile.
@@ -402,6 +440,25 @@ class BasicProfile(Profile):
         thetae[thetae == self.missing] = ma.masked
         thetae.set_fill_value(self.missing)
         return thetae
+    
+    def get_thetaes_profile(self):
+        '''
+            Function to calculate the theta-es profile.
+            
+            Parameters
+            ----------
+            None
+            
+            Returns
+            -------
+            Array of theta-es profile
+            '''
+        thetaes = ma.empty(self.pres.shape[0])
+        for i in range(len(self.v)):
+            thetaes[i] = thermo.ctok( thermo.thetaes(self.pres[i], self.tmpc[i]) )
+        thetaes[thetaes == self.missing] = ma.masked
+        thetaes.set_fill_value(self.missing)
+        return thetaes
 
 
 
