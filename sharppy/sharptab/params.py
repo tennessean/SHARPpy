@@ -21,6 +21,7 @@ __all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ss
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
+__all__ += ['tie']
 
 class DefineParcel(object):
     '''
@@ -3582,7 +3583,7 @@ def jeff(prof):
 
     qw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
     tmp500 = interp.temp(prof, 500)
-    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
+    tdd700 = interp.tdd(prof, 700)
 
     jeff = ( 1.6 * qw850 ) - tmp500 - ( 0.5 * tdd700 ) - 8
 
@@ -4040,9 +4041,9 @@ def hi(prof):
             Humidity Index (number)
     '''
 
-    tdd850 = interp.temp(prof, 850) - interp.dwpt(prof, 850)
-    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
-    tdd500 = interp.temp(prof, 500) - interp.dwpt(prof, 500)
+    tdd850 = interp.tdd(prof, 850)
+    tdd700 = interp.tdd(prof, 700)
+    tdd500 = interp.tdd(prof, 500)
 
     hi = tdd850 + tdd700 + tdd500
 
@@ -4154,9 +4155,8 @@ def dmpi1(prof):
             Dry Microburst Potential Index, version 1 (number)
     '''
 
-    
-    tdd500 = interp.temp(prof, 500) - interp.dwpt(prof, 500)
-    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
+    tdd500 = interp.tdd(prof, 500)
+    tdd700 = interp.tdd(prof, 700)
     lr75 = lapse_rate(prof, 700, 500, pres=True)
 
     dmpi1 = lr75 + tdd700 - tdd500
@@ -4191,8 +4191,8 @@ def dmpi2(prof):
     lvl13 = interp.to_msl(prof, utils.FT2M(13000))
     pres5 = interp.pres(prof, lvl5)
     pres13 = interp.pres(prof, lvl13)
-    tdd5 = interp.temp(prof, pres5) - interp.dwpt(prof, pres5)
-    tdd13 = interp.temp(prof, pres13) - interp.dwpt(prof, pres13)
+    tdd5 = interp.tdd(prof, pres5)
+    tdd13 = interp.tdd(prof, pres13)
     lr_513 = lapse_rate(prof, lvl5, lvl13, pres=False)
 
     dmpi2 = lr_513 + tdd5 - tdd13
@@ -4216,8 +4216,8 @@ def hmi(prof):
             Hybrid Microburst Index
     '''
     
-    tdd850 = interp.temp(prof, 850) - interp.dwpt(prof, 850)
-    tdd670 = interp.temp(prof, 670) - interp.dwpt(prof, 670)
+    tdd850 = interp.tdd(prof, 850)
+    tdd670 = interp.tdd(prof, 670)
     lr_86 = lapse_rate(prof, 850, 670, pres=True)
 
     hmi = lr_86 + tdd850 - tdd670
@@ -4301,10 +4301,14 @@ def ulii(prof):
 
     tmp500 = interp.temp(prof, 500)
     dpt500 = interp.dwpt(prof, 500)
+    vtp400 = interp.vtmp(prof, 400)
+    vtp300 = interp.vtmp(prof, 300)
     t_pcl54 = thermo.lifted(500, tmp500, dpt500, 400)
-    t_pcl53 = thermo.lifted(500, tmp500, dpt500, 300)    
+    t_pcl53 = thermo.lifted(500, tmp500, dpt500, 300)
+    vt_pcl54 = thermo.virtemp(400, t_pcl54, t_pcl54)
+    vt_pcl53 = thermo.virtemp(300, t_pcl53, t_pcl53)
 
-    ulii = ( t_pcl54 - tmp500 ) + ( t_pcl53 - tmp500 )
+    ulii = ( vtp400 - vt_pcl54 ) + ( vtp300 - vt_pcl53 )
 
     return ulii
 
@@ -4432,7 +4436,7 @@ def fin(prof, **kwargs):
     muli = mupcl.li5
 
     # Calculate 700 mb dewpoint depression
-    tdd700 = interp.temp(prof, 700) - interp.dwpt(prof, 700)
+    tdd700 = interp.tdd(prof, 700)
 
     # Calculate 10-m AGL-750 mb shear
     p10m = interp.pres(prof, interp.to_msl(prof, 10))
@@ -5174,3 +5178,32 @@ def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
     cpst3 = 100 / ( 1 + np.exp(-reg) )
 
     return cpst3
+
+def tie(prof):
+    '''
+        Tornado Intensity Equation
+
+        Formulation taken from Colquhoun and Riley 1996, WAF v.11 pg. 367.
+
+        This equation is a regression equation designed to help predict the likely intensity
+        of a tornado forming within the proximity of a sounding station, given surface-based
+        Lifted Index and surface to 500 mb wind shear.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        tie : number
+            Tornado Intensity Equation (number)
+    '''
+
+    sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
+    sli = sbpcl.li5
+    p_sfc = prof.pres[prof.sfc]
+    sfc_600mb_shr = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p_sfc, ptop=600)))
+
+    tie = ( -0.145 * sli ) + ( 0.136 * sfc_600mb_shr ) - 1.5
+
+    return tie

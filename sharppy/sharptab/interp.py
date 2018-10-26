@@ -7,7 +7,7 @@ from sharppy.sharptab import utils, thermo
 from sharppy.sharptab.constants import *
 
 
-__all__ = ['pres', 'hght', 'temp', 'dwpt', 'vtmp', 'thetae', 'components', 'vec']
+__all__ = ['pres', 'hght', 'temp', 'dwpt', 'tdd', 'vtmp', 'thetae', 'components', 'vec']
 __all__ += ['to_agl', 'to_msl']
 
 
@@ -133,7 +133,7 @@ def dwpt(prof, p):
 
     Returns
     -------
-    Dew point tmperature (C) at the given pressure
+    Dew point temperature (C) at the given pressure
 
     '''
     # Note: numpy's interpoloation routine expects the interpoloation
@@ -141,6 +141,26 @@ def dwpt(prof, p):
     # vertical, we must reverse the order of the two arrays to satisfy
     # this requirement.
     return generic_interp_pres(np.log10(p), prof.logp[::-1], prof.dwpc[::-1])
+
+
+def tdd(prof, p):
+    '''
+    Interpolates the given data to calculate a dew point depression
+    at a given pressure
+
+    Parameters
+    ----------
+    prof : profile object
+        Profile object
+    p : number, numpy array
+        Pressure (hPa) of the level for which dew point depression is desired
+
+    Returns
+    -------
+    Dew point depression (C) at the given pressure
+
+    '''
+    return temp(prof, p) - dwpt(prof, p)
 
 
 def vtmp(prof, p):
@@ -157,7 +177,7 @@ def vtmp(prof, p):
 
     Returns
     -------
-    Virtual tmperature (C) at the given pressure
+    Virtual temperature (C) at the given pressure
 
     '''
     return generic_interp_pres(np.log10(p), prof.logp[::-1], prof.vtmp[::-1])
