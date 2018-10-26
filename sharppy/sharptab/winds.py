@@ -273,7 +273,7 @@ def helicity(prof, lower, upper, stu=0, stv=0, dp=-1, exact=True):
     '''
     Calculates the relative helicity (m2/s2) of a layer from lower to upper.
     If storm-motion vector is supplied, storm-relative helicity, both
-    positve and negative, is returned.
+    positive and negative, is returned.
 
     Parameters
     ----------

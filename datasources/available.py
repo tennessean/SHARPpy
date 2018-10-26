@@ -1,6 +1,7 @@
 
 import urllib2
 import re
+import glob, os
 import numpy as np
 from datetime import datetime, timedelta
 
@@ -170,6 +171,17 @@ def _availableat_ncarens(dt):
     stns = re.findall("([\w]{3}).txt", text)
     return stns
 
+## VSE CODE
+vse_base_url = '/glade/scratch/ahijevyc/VSE/3km_pbl1/'
+
+def _available_vse():
+    text = glob.glob(vse_base_url+'20*')
+    matches = sorted(text)
+    return [ datetime.strptime(os.path.basename(m), '%Y%m%d%H') for m in matches ]
+
+def _availableat_vse(dt):
+    return ['DNR', 'DDC', 'LBF', 'GJT', 'RIW', 'UNR', 'ABR', 'BIS', 'MPX', 'OAX', 'DVN', 'TOP', 'ILX', 'ILN', 'SGF', 'BNA', 'OUN', 'AMA', 'ABQ', 'EPZ', 'MAF', 'DRT', 'FWD', 'SHV', 'LZK', 'LCH', 'STL', 'BMX', 'GRB', 'CRP', 'JAN', 'TFX', 'SLC', 'FGZ', 'TWC', 'BRO', 'VEF', 'REV', 'LKN', 'GGW', 'NKX', 'VBG', 'OAK', 'MFR', 'SLE', 'UIL', 'OTX', 'LMN', 'INL', 'DTX', 'APX', 'FFC', 'KEY', 'MFL', 'TBW', 'TLH', 'JAX', 'CHS', 'MHX', 'GSO', 'RNK', 'IAD', 'PIT', 'APG', 'WAL', 'OKX', 'BUF', 'ALB', 'CHH', 'GYX', 'CAR', 'MCU', 'WLW', 'WMW', 'BOI', 'PHX']
+
 def _available_nssl(ens=False):
     path_to_nssl_wrf = ''
     path_to_nssl_wrf_ens = ''
@@ -180,6 +192,7 @@ available = {
     'spc':{'observed':_available_spc},
     'ou_pecan': {'pecan ensemble': _available_oupecan },
     'ncar_ens': {'ncar ensemble': _available_ncarens },
+    'vse': {'vse': _available_vse },
 }
 
 # A dictionary containing paths to the stations for different observations, forecast models, etc.
@@ -189,6 +202,7 @@ availableat = {
     'spc':{'observed':_availableat_spc},
     'ou_pecan': {'pecan ensemble': lambda dt: _availableat_oupecan(dt) },
     'ncar_ens': {'ncar ensemble': lambda dt: _availableat_ncarens(dt) },
+    'vse': {'vse': lambda dt: _availableat_vse(dt) },
 }
 
 # Set the available and available-at-time functions for the PSU data.
@@ -205,3 +219,5 @@ if __name__ == "__main__":
     print dt
     stns = availableat['ou_pecan']['pecan ensemble'](dt[-2])
     print stns
+    dt = available['vse']['vse']()
+    print dt

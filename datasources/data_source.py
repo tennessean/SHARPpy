@@ -239,7 +239,8 @@ class Outlet(object):
     def _loadCSV(self, csv_file_name):
         csv = []
         csv_file = open(csv_file_name, 'r')
-        self._csv_fields = [ f.lower() for f in csv_file.readline().strip().split(',') ]
+        # Added .strip() to allow whitespace between commas in header of csv sounding location file.
+        self._csv_fields = [ f.lower().strip() for f in csv_file.readline().strip().split(',') ]
 
         for line in csv_file:
             line_dict = dict( (f, v) for f, v in zip(self._csv_fields, line.strip().split(',')))
@@ -349,6 +350,8 @@ class DataSource(object):
         return self._observed
 
 if __name__ == "__main__":
+    import pdb
+    pdb.set_trace()
     ds = loadDataSources()
     ds = dict( (n, ds[n]) for n in ['Observed', 'GFS'] )
 
