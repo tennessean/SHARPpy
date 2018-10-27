@@ -17,7 +17,8 @@ __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
-__all__ += ['hi', 'windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi', 'ulii', 'ssi', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
+__all__ += ['windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi']
+__all__ += ['hi', 'ulii', 'ssi', 'csv', 'z_index', 'k_high1', 'k_high2', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
@@ -4025,33 +4026,6 @@ def snow(prof):
 
     return snow
 
-def hi(prof):
-    '''
-        Humidity Index
-
-        This index, derived by Z. Litynska in 1976, calculates moisture and instability using the dewpoint
-        depressions of several levels.  It has proven to be fairly reliable, especially in the
-        Mediterranean regions of the world.  Lower values indicate higher moisture content and greater
-        instability potential.
-
-        Parameters
-        ----------
-        prof : Profile object
-
-        Returns
-        -------
-        hi :number
-            Humidity Index (number)
-    '''
-
-    tdd850 = interp.tdd(prof, 850)
-    tdd700 = interp.tdd(prof, 700)
-    tdd500 = interp.tdd(prof, 500)
-
-    hi = tdd850 + tdd700 + tdd500
-
-    return hi
-
 def windex(prof, **kwargs):
     '''
         Wind Index
@@ -4283,6 +4257,33 @@ def mdpi(prof):
 
     return mdpi
 
+def hi(prof):
+    '''
+        Humidity Index
+
+        This index, derived by Z. Litynska in 1976, calculates moisture and instability using the dewpoint
+        depressions of several levels.  It has proven to be fairly reliable, especially in the
+        Mediterranean regions of the world.  Lower values indicate higher moisture content and greater
+        instability potential.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        hi :number
+            Humidity Index (number)
+    '''
+
+    tdd850 = interp.tdd(prof, 850)
+    tdd700 = interp.tdd(prof, 700)
+    tdd500 = interp.tdd(prof, 500)
+
+    hi = tdd850 + tdd700 + tdd500
+
+    return hi
+
 def ulii(prof):
     '''
         Upper Level Instability Index
@@ -4349,6 +4350,133 @@ def ssi(prof):
 
     return ssi
 
+def csv(prof):
+    '''
+        "C" Stability Value
+
+        Formulation taken from Cox 1961, BAMS v.42 pg. 770.
+
+        This index was originally derived in an effort to forecast thunderstorm potential.  It is found by
+        raising the potential temperature at the 850 mb level moist adiabatically up to 600 mb, then subtracting
+        the 600 mb ambient temperature from it.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        csv : number
+            "C" Stability Value (number)
+    '''
+
+    theta850 = thermo.theta(850, interp.temp(prof, 850))
+    wtlft86 = thermo.wetlift(1000, theta850, 600)
+    tmp600 = interp.temp(prof, 600)
+
+    csv = wtlft86 - tmp600
+
+    return csv
+
+def z_index(prof):
+    '''
+        Z-Index
+
+        Formulation taken from Randerson 1977, MWR v.105 pg. 711.
+
+        This index was developed by D. Randerson in 1977 in an effort to forecast thunderstorms over Nevada.
+        It makes use of a regression equation that uses multiple variables: surface pressure (mb), surface
+        temperature (degrees C), surface dewpoint depression (degrees C), 850 mb ambient temperature (degrees C),
+        850 mb dewpoint depression (degrees C), 700 mb height (m), 500 mb ambient temperature (degrees C), the
+        U-component of the 500 mb wind (kts), and 500 mb dewpoint temperature (degrees C).
+
+        If the Z value is 0, then the probability of a thunderstorm is about 50%.  If the Z value is positive,
+        then the probability is less than 50%.  If the Z value is negative, then the probability is over 50%.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        z_index : number
+            Z-Index (number)
+    '''
+
+    pres_sfc = prof.pres[prof.sfc]
+    tmp_sfc = prof.tmpc[prof.sfc]
+    tdd_sfc = tmp_sfc - prof.dwpc[prof.sfc]
+    tmp850 = interp.temp(prof, 850)
+    tdd850 = interp.tdd(prof, 850)
+    hght700 = interp.hght(prof, 700)
+    tmp500 = interp.temp(prof, 500)
+    dpt500 = interp.dwpt(prof, 500)
+    vec500 = interp.vec(prof, 500)
+    u500 = utils.vec2comp(vec500[0], vec500[1])[0]
+
+    z_d = ( 165.19 * pres_sfc ) - ( 14.63 * tmp_sfc ) + ( 11.73 * tdd_sfc ) + ( 31.52 * tmp850 ) + ( 38.22 * tdd850 ) - ( 17.30 * hght700 ) + ( 85.89 * tmp500 ) + ( 12.69 * u500 ) - ( 12.85 * dpt500 )
+    z_index = 0.01 * ( z_d - 93200 )
+
+    return z_index
+
+def k_high1(prof):
+    '''
+        K-Index, high altitude version 1
+
+        Formulation taken from Modahl 1979, JAM v.18 pg. 675.
+
+        This index was derived by A. Modahl as a variant of the K-Index to be used in high-altitude areas.
+        However, testing of the initial modified version (version 1) suggested that omitting the
+        temperature lapse rate term and leaving just the 850 mb dewpoint temperature and 500 mb dewpoint
+        depression terms (version 2) would give results similar to the initial version.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        k_high1 : number
+            K-Index, high altitude version 1
+    '''
+
+    tmp700 = interp.temp(prof, 700)
+    tmp300 = interp.temp(prof, 300)
+    dpt850 = interp.dwpt(prof, 850)
+    tdd500 = interp.tdd(prof, 500)
+
+    k_high1 = ( tmp700 - tmp300 ) + dpt850 - tdd500
+
+    return k_high1
+
+def k_high2(prof):
+    '''
+        K-Index, high altitude version 2
+
+        Formulation taken from Modahl 1979, JAM v.18 pg. 675.
+
+        This index was derived by A. Modahl as a variant of the K-Index to be used in high-altitude areas.
+        However, testing of the initial modified version (version 1) suggested that omitting the
+        temperature lapse rate term and leaving just the 850 mb dewpoint temperature and 500 mb dewpoint
+        depression terms (version 2) would give results similar to the initial version.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        k_high2 : number
+            K-Index, high altitude version 2
+    '''
+
+    dpt850 = interp.dwpt(prof, 850)
+    tdd500 = interp.tdd(prof, 500)
+
+    k_high2 = dpt850 - tdd500
+
+    return k_high2
+
 def swiss00(prof):
     '''
         Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (SWISS00)
@@ -4371,7 +4499,7 @@ def swiss00(prof):
     si850 = getattr(prof, 'ssi', ssi(prof))
     p3km, p6km = interp.pres(prof, interp.to_msl(prof, np.array([3000., 6000.])))
     ws36 = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p3km, ptop=p6km)))
-    tdd600 = interp.temp(prof, 600) - interp.dwpt(prof, 600)
+    tdd600 = interp.tdd(prof, 600)
 
     swiss00 = si850 + ( 0.4 * ws36 ) + ( tdd600 / 10 )
 
@@ -4402,7 +4530,7 @@ def swiss12(prof):
     p_sfc = prof.pres[prof.sfc]
     p3km = interp.pres(prof, interp.to_msl(prof, 3000))
     ws03 = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p_sfc, ptop=p3km)))
-    tdd650 = interp.temp(prof, 650) - interp.dwpt(prof, 650)
+    tdd650 = interp.tdd(prof, 650)
 
     swiss12 = sli - ( 0.3 * ws03 ) + ( 0.3 * tdd650 )
 
