@@ -645,6 +645,7 @@ class ConvectiveProfile(BasicProfile):
             effective inflow layer
         self.etopm : The top, meters (agl), of the
             effective inflow layer
+        self.cnvcpcl : Convective Temperature Parcel
     
         Parameters
         ----------
@@ -662,6 +663,7 @@ class ConvectiveProfile(BasicProfile):
             self.sfcpcl = params.parcelx( self, flag=1 )
         self.fcstpcl = params.parcelx( self, flag=2 )
         self.mlpcl = params.parcelx( self, flag=4 )
+        self.cnvcpcl = params.parcelx(self, flag=7 )
         self.usrpcl = params.Parcel()
 
         ## get the effective inflow layer data

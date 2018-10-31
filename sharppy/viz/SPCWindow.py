@@ -174,6 +174,8 @@ class SPCWidget(QWidget):
             return prof.mupcl
         elif name == 'EFF':
             return prof.effpcl
+        elif name == 'CNVC':
+            return prof.cnvcpcl
         elif name == "USER":
             return prof.usrpcl
 
@@ -188,6 +190,8 @@ class SPCWidget(QWidget):
             return "MU"
         elif pcl == prof.effpcl:
             return "EFF"
+        elif pcl == prof.cnvcpcl:
+            return "CNVC"
         elif pcl == prof.usrpcl:
             return "USER"
 

@@ -42,6 +42,7 @@ class DefineParcel(object):
         4: Mean Mixed Layer Parcel
         5: User Defined Parcel
         6: Mean Effective Layer Parcel
+        7: Convective Temperature Parcel
         
         Optional Keywords (Depending on Parcel Selected)
         Parcel (flag) == 1: Observed Surface Parcel
@@ -71,6 +72,10 @@ class DefineParcel(object):
         ecinh : number (default = -250)
         The maximum amount of CINH allowed for a parcel to be
         considered as part of the inflow layer
+        Parcel (flag) == 7: Convective Temperature Parcel
+        pres : number (default = 100 hPa)
+        Depth over which to mix the boundary layer; only changes
+        temperature; does not affect moisture
         
         '''
     def __init__(self, prof, flag, **kwargs):
@@ -93,6 +98,9 @@ class DefineParcel(object):
         elif flag == 6:
             self.presval = kwargs.get('pres', 100)
             self.__effective(prof, **kwargs)
+        elif flag == 7:
+            self.presval = kwargs.get('pres', 100)
+            self.__convective(prof, **kwargs)
         else:
             #print 'Defaulting to Surface Parcel'
             self.presval = kwargs.get('pres', prof.gSndg[prof.sfc])
@@ -189,6 +197,18 @@ class DefineParcel(object):
         else: self.pbot = ma.masked
         if utils.QC(ptop): self.ptop = ptop
         else: self.pbot = ma.masked
+    
+
+    def __convective(self, prof, **kwargs):
+        '''
+            Create the convective temperature parcel.
+
+            '''
+        self.desc = 'Convective Temperature Parcel'
+        self.tmpc = convective_temp(prof, **kwargs)
+        self.pres = prof.pres[prof.sfc]
+        pbot = self.pres; ptop = self.pres - 100.
+        self.dwpc = thermo.temp_at_mixrat(mean_mixratio(prof, pbot, ptop, exact=True), self.pres)
 
 
 class Parcel(object):
@@ -4543,7 +4563,7 @@ def fin(prof, **kwargs):
         Formulation taken from Ukkonen et. al. 2017, JAMC 56 pg. 2349
 
         This index is a modified version of the SWISS12 Index (q.v.) that makes use of the Most Unstable
-        Lifted Index, the 700 mb dewpoint depression, and the wind shear between 10 meters AGL and 750 mb.
+        Lifted Index, the 700 mb dewpoint depression, and the wind shear between the surface and 750 mb.
         Negative values indicate favorable instability and shear for thunderstorm development.
 
         Parameters
@@ -4569,11 +4589,11 @@ def fin(prof, **kwargs):
     # Calculate 700 mb dewpoint depression
     tdd700 = interp.tdd(prof, 700)
 
-    # Calculate 10-m AGL-750 mb shear
-    p10m = interp.pres(prof, interp.to_msl(prof, 10))
-    ws_10m_750mb = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p10m, ptop=750)))
+    # Calculate surface-750 mb shear
+    sfc_pres = prof.pres[prof.sfc]
+    ws_sfc_750mb = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=750)))
 
-    fin = muli + ( tdd700 / 10 ) - ( ws_10m_750mb / 10 )
+    fin = muli + ( tdd700 / 10 ) - ( ws_sfc_750mb / 10 )
 
     return fin
 
