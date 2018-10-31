@@ -154,6 +154,7 @@ class plotText(backgroundText):
         self.parcels["FCST"] = prof.fcstpcl
         self.parcels["MU"] = prof.mupcl
         self.parcels["EFF"] = prof.effpcl
+        self.parcels["CNVC"] = prof.cnvcpcl
         self.parcels["USER"] = prof.usrpcl
 
     def setProf(self, prof):
