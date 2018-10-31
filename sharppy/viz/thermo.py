@@ -652,12 +652,12 @@ class SelectParcels(QWidget):
             self.pcl_count += 1
         self.eff.stateChanged.connect(self.changeParcel)
 
-        self.eff = QtGui.QCheckBox('Convective Temperature Parcel', self)
-        self.eff.move(20, 120)
+        self.cnvc = QtGui.QCheckBox('Convective Temperature Parcel', self)
+        self.cnvc.move(20, 120)
         if "CNVC" in self.parcel_types:
-            self.eff.toggle()
+            self.cnvc.toggle()
             self.pcl_count += 1
-        self.eff.stateChanged.connect(self.changeParcel)
+        self.cnvc.stateChanged.connect(self.changeParcel)
 
         self.usr = QtGui.QCheckBox('User Defined Parcel', self)
         self.usr.move(20, 140)
@@ -667,7 +667,7 @@ class SelectParcels(QWidget):
         self.usr.stateChanged.connect(self.changeParcel)
 
 
-        self.setGeometry(300, 300, 250, 200)
+        self.setGeometry(300, 1000, 250, 180)
         self.setWindowTitle('Show Parcels')
         self.ok = QtGui.QPushButton('Ok', self)
         self.ok.move(20,150)
