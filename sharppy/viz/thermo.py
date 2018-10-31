@@ -667,10 +667,10 @@ class SelectParcels(QWidget):
         self.usr.stateChanged.connect(self.changeParcel)
 
 
-        self.setGeometry(300, 1000, 250, 180)
+        self.setGeometry(300, 300, 250, 200)
         self.setWindowTitle('Show Parcels')
         self.ok = QtGui.QPushButton('Ok', self)
-        self.ok.move(20,150)
+        self.ok.move(20,170)
         self.ok.clicked.connect(self.okPushed)
 
         #cb.stateChanged.connect(self.changeTitle)
