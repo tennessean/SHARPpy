@@ -5,6 +5,20 @@ import numpy.ma as ma
 from sharppy.sharptab import interp, utils, thermo, winds
 from sharppy.sharptab.constants import *
 
+'''
+    This file contains various functions to perform the calculation of various convection indices.
+    Because of this, parcel lifting routines are also found in this file.
+    Functions denoted with a (*) in the docstring refer to functions that were added to the SHARPpy package that 
+    were not ported from the Storm Prediction Center.  They have been included as they have been used by the 
+    community in an effort to expand SHARPpy to support the many parameters used in atmospheric science. 
+    
+    While the logic for these functions are based in the scientific literature, validation
+    of the output from these functions is occasionally difficult to perform.  Although we have made an effort
+    to resolve code issues when they arise, values from these functions may be erronious and may require additional 
+    inspection by the user.  We appreciate any contributions by the meteorological community that can
+    help better validate these SHARPpy functions!
+    
+'''
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
@@ -342,7 +356,7 @@ def dgz(prof):
 
 def lhp(prof):
     '''
-        Large Hail Parameter
+        Large Hail Parameter (*)
 
         From Johnson and Sugden (2014), EJSSM
 
@@ -2466,7 +2480,7 @@ def esp(prof, **kwargs):
 
 def sherb(prof, **kwargs):
     '''
-        Severe Hazards In Environments with Reduced Buoyancy (SHERB) Parameter
+        Severe Hazards In Environments with Reduced Buoyancy (SHERB) Parameter (*)
 
         A composite parameter designed to assist forecasters in the High-Shear
         Low CAPE (HSLC) environment.  This allows better discrimination 
@@ -2505,7 +2519,9 @@ def sherb(prof, **kwargs):
     lr75 = lapse_rate(prof, 700, 500, pres=True)
 
     if effective == False:
-        shear = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear))
+        p3km = interp.pres(prof, interp.to_msl(prof, 3000))
+        sfc_pres = prof.pres[prof.sfc]
+        shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
         sherb = ( shear / 26. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
     else:
         if hasattr(prof, 'ebwd'):
@@ -2811,7 +2827,7 @@ def dcape(prof):
 
 def precip_eff(prof, **kwargs):
     '''
-        Precipitation Efficiency
+        Precipitation Efficiency (*)
 
         This calculation comes from Noel and Dobur 2002, published
         in NWA Digest Vol 26, No 34.
@@ -2884,7 +2900,7 @@ def pbl_top(prof):
 
 def dcp(prof):
     '''
-        Derecho Composite Parameter
+        Derecho Composite Parameter (*)
 
         This parameter is based on a data set of 113 derecho events compiled by Evans and Doswell (2001).
         The DCP was developed to identify environments considered favorable for cold pool "driven" wind
@@ -3097,7 +3113,7 @@ def ehi(prof, pcl, hbot, htop, stu=0, stv=0):
 
 def sweat(prof):
     '''
-        SWEAT Index
+        SWEAT Index (*)
 
         Computes the SWEAT (Severe Weather Threat Index) using the following numbers:
 
@@ -3184,7 +3200,7 @@ def thetae_diff(prof):
 
 def spot(prof):
     '''
-        SPOT Index
+        SPOT Index (*)
 
         The Surface Potential (SPOT) Index, unlike most other forecasting indices,
         uses only data collected from the surface level.  As such, it has the
@@ -3334,7 +3350,7 @@ def wbz(prof):
 
 def thomp(prof, pcl):
     '''
-        Thompson Index
+        Thompson Index (*)
 
         The Thompson Index is a combination of the K Index and Lifted Index.
         It attempts to integrate elevated moisture into the index, using the
@@ -3359,7 +3375,7 @@ def thomp(prof, pcl):
 
 def tq(prof):
     '''
-        TQ Index
+        TQ Index (*)
 
         The TQ index is used for assessing the probability of low-topped
         convection.  Values of more than 12 indicate an unstable lower
@@ -3387,7 +3403,7 @@ def tq(prof):
 
 def s_index(prof):
     '''
-        S-Index
+        S-Index (*)
 
         This European index is a mix of the K Index and Vertical Totals Index.
         The S-Index was developed by the German Military Geophysical Office.
@@ -3419,7 +3435,7 @@ def s_index(prof):
 
 def boyden(prof):
     '''
-        Boyden Index
+        Boyden Index (*)
 
         This index, used in Europe, does not factor in moisture.
         It evaluates thickness and mid-level warmth.  It was defined
@@ -3446,7 +3462,7 @@ def boyden(prof):
 
 def dci(prof, pcl):
     '''
-        Deep Convective Index
+        Deep Convective Index (*)
 
         This index is a combination of parcel theta-e at 850 mb and
         Lifted Index.  This attempts to further improve the Lifted Index.
@@ -3471,7 +3487,7 @@ def dci(prof, pcl):
 
 def pii(prof):
     '''
-        Potential Instability Index
+        Potential Instability Index (*)
 
         This index relates potential instability in the middle atmosphere with
         thickness.  It was proposed by A. J. Van Delden in 2001.  Positive values
@@ -3504,7 +3520,7 @@ def pii(prof):
 
 def ko(prof):
     '''
-        KO Index
+        KO Index (*)
 
         This index was developed by Swedish meteorologists and used heavily by the
         Deutsche Wetterdienst.  It compares values of equivalent potential
@@ -3539,7 +3555,7 @@ def ko(prof):
 
 def brad(prof):
     '''
-        Bradbury Index
+        Bradbury Index (*)
 
         Also known as the Potential Wet-Bulb Index, this index is used in Europe.
         It is a measure of the potential instability between 850 and 500 mb.  It 
@@ -3564,7 +3580,7 @@ def brad(prof):
 
 def rack(prof):
     '''
-        Rackliff Index
+        Rackliff Index (*)
 
         This index, used primarily in Europe during the 1950s, is a simple comparison
         of the 900 mb wet bulb temperature with the 500 mb dry bulb temperature.
@@ -3589,7 +3605,7 @@ def rack(prof):
 
 def jeff(prof):
     '''
-        Jefferson Index
+        Jefferson Index (*)
 
         A European stability index, the Jefferson Index was intended to be an improvement of the
         Rackliff Index. The change would make it less dependent on temperature. The version used
@@ -3615,7 +3631,7 @@ def jeff(prof):
 
 def sc_totals(prof):
     '''
-        Surface-based Cross Totals
+        Surface-based Cross Totals (*)
 
         This index, developed by J. Davies in 1988, is a modification of the Cross Totals index that
         replaces the 850 mb dewpoint with the surface dewpoint.  As such, this index will usually
@@ -3637,7 +3653,7 @@ def sc_totals(prof):
 
 def esi(prof, sbcape):
     '''
-        Energy Shear Index
+        Energy Shear Index (*)
 
         This index, proposed as a way of parameterizing updraft duration, multiplies SBCAPE by
         850 mb-6 km AGL mean vertical shear magnitude in m/s.  A 2002 study by Brimelow and Reuter
@@ -3666,7 +3682,7 @@ def esi(prof, sbcape):
 
 def vgp(prof, pcl, **kwargs):
     '''
-        Vorticity Generation Potential
+        Vorticity Generation Potential (*)
 
         The Vorticity Generation Potential index was developed by Erik Rasmussen and
         David Blanchard in 1998.  It assesses the possibility for vorticity being
@@ -3708,7 +3724,7 @@ def vgp(prof, pcl, **kwargs):
 
 def aded1(prof):
     '''
-        Adedokun Index, version 1
+        Adedokun Index, version 1 (*)
 
         The Adedokun Index (created by J. A. Adedokun in 1981 and 1982) was developed
         in two versions for forecasting precipitation in west Africa.  The Index 
@@ -3742,7 +3758,7 @@ def aded1(prof):
 
 def aded2(prof):
     '''
-        Adedokun Index, version 2
+        Adedokun Index, version 2 (*)
 
         The Adedokun Index (created by J. A. Adedokun in 1981 and 1982) was developed
         in two versions for forecasting precipitation in west Africa.  The Index 
@@ -3776,7 +3792,7 @@ def aded2(prof):
 
 def ei(prof):
     '''
-        Energy Index
+        Energy Index (*)
 
         The Energy Index (also known as the Total Energy Index) was developed by G. L.
         Darkow in 1968.  It calculates the moist static energy at the 500 and 850 mb levels
@@ -3814,7 +3830,7 @@ def ei(prof):
 
 def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     '''
-        Enhanced Energy Helicity Index
+        Enhanced Energy Helicity Index (*)
 
         The original 0-1 km EHI presented a normalized product of 0-1 km storm-relative helicity
         (SRH) and 100 mb mean parcel (ML) CAPE. This modified version more closely mimics the
@@ -3901,7 +3917,7 @@ def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
 
 def vtp(prof, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
     '''
-        Violent Tornado Parameter
+        Violent Tornado Parameter (*)
 
         From Hampshire et. al. 2017, JOM page 8.
 
@@ -3968,7 +3984,7 @@ def vtp(prof, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
 
 def snsq(prof):
     '''
-        Snow Squall Parameter
+        Snow Squall Parameter (*)
 
         From Banacos et. al. 2014, JOM page 142.
 
@@ -4019,7 +4035,7 @@ def snsq(prof):
 
 def snow(prof):
     '''
-        Snow Index
+        Snow Index (*)
 
         This index uses two thickness layers: the 850-700 mb thickness layer and the 1000-850 mb thickness
         layer.  A value of greater than 4179 indicates liquid precipitation; a value of 4179 indicates
@@ -4048,7 +4064,7 @@ def snow(prof):
 
 def windex(prof, **kwargs):
     '''
-        Wind Index
+        Wind Index (*)
 
         This index, a measure of microburst potential and downdraft instability, estimates maximum
         convective wind gust speeds.  Created by Donald McCann in 1994, the index is displayed in knots.
@@ -4089,7 +4105,7 @@ def windex(prof, **kwargs):
 
 def wmsi(prof, **kwargs):
     '''
-        Wet Microburst Severity Index
+        Wet Microburst Severity Index (*)
 
         This index, developed by K. L. Pryor and G. P. Ellrod in 2003, was developed to better
         assess the potential deverity of wet microbursts.  WSMI is a product of CAPE
@@ -4130,7 +4146,7 @@ def wmsi(prof, **kwargs):
 
 def dmpi1(prof):
     '''
-        Dry Microburst Potential Index, version 1
+        Dry Microburst Potential Index, version 1 (*)
 
         This index was primarily derived by R. Wakimoto in 1985 to forecast potential for
         dry microbursts.
@@ -4162,7 +4178,7 @@ def dmpi1(prof):
 
 def dmpi2(prof):
     '''
-        Dry Microburst Potential Index, version 2
+        Dry Microburst Potential Index, version 2 (*)
 
         This index was primarily derived by R. Wakimoto in 1985 to forecast potential for
         dry microbursts.
@@ -4198,7 +4214,7 @@ def dmpi2(prof):
 
 def hmi(prof):
     '''
-        Hybrid Microburst Index
+        Hybrid Microburst Index (*)
 
         This index, created by K. L. Pryor in 2006, is designed to detect conditions
         favorable for both wet and dry microbursts.
@@ -4223,7 +4239,7 @@ def hmi(prof):
 
 def mwpi(prof, pcl):
     '''
-        Microburst Windspeed Potential Index
+        Microburst Windspeed Potential Index (*)
 
         This index is designed to improve the Hybrid Microburst Index by adding a
         term related to CAPE values.
@@ -4247,7 +4263,7 @@ def mwpi(prof, pcl):
 
 def mdpi(prof):
     '''
-        Microburst Day Potential Index
+        Microburst Day Potential Index (*)
 
         This index, developed jointly by the USAFs 45th Weather Squadronm and NASA's Applied
         Meteorology Uint (AMU) in 1995, calculates the risk of a microburst based on the maximum
@@ -4279,7 +4295,7 @@ def mdpi(prof):
 
 def hi(prof):
     '''
-        Humidity Index
+        Humidity Index (*)
 
         This index, derived by Z. Litynska in 1976, calculates moisture and instability using the dewpoint
         depressions of several levels.  It has proven to be fairly reliable, especially in the
@@ -4306,7 +4322,7 @@ def hi(prof):
 
 def ulii(prof):
     '''
-        Upper Level Instability Index
+        Upper Level Instability Index (*)
 
         This index was developed as part of a method for computing wind gusts produced by
         high-based thunderstorms, typically in the Rocky Mountains region.  It makes use of
@@ -4338,7 +4354,7 @@ def ulii(prof):
 
 def ssi(prof):
     '''
-        Showalter Stability Index
+        Showalter Stability Index (*)
 
         This index, one of the first forecasting indices ever constructed, lifts a parcel
         from 850 mb to 500 mb, then compares it with the ambient temperature (similar to
@@ -4372,7 +4388,7 @@ def ssi(prof):
 
 def csv(prof):
     '''
-        "C" Stability Value
+        "C" Stability Value (*)
 
         Formulation taken from Cox 1961, BAMS v.42 pg. 770.
 
@@ -4400,7 +4416,7 @@ def csv(prof):
 
 def z_index(prof):
     '''
-        Z-Index
+        Z-Index (*)
 
         Formulation taken from Randerson 1977, MWR v.105 pg. 711.
 
@@ -4441,7 +4457,7 @@ def z_index(prof):
 
 def k_high1(prof):
     '''
-        K-Index, high altitude version 1
+        K-Index, high altitude version 1 (*)
 
         Formulation taken from Modahl 1979, JAM v.18 pg. 675.
 
@@ -4471,7 +4487,7 @@ def k_high1(prof):
 
 def k_high2(prof):
     '''
-        K-Index, high altitude version 2
+        K-Index, high altitude version 2 (*)
 
         Formulation taken from Modahl 1979, JAM v.18 pg. 675.
 
@@ -4499,7 +4515,7 @@ def k_high2(prof):
 
 def swiss00(prof):
     '''
-        Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (SWISS00)
+        Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (SWISS00) (*)
 
         This index is one of two versions of a forecasting index that was developed for use in forecasting
         thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
@@ -4527,7 +4543,7 @@ def swiss00(prof):
 
 def swiss12(prof):
     '''
-        Stability and Wind Shear index for thunderstorms in Switzerland, 12z version (SWISS00)
+        Stability and Wind Shear index for thunderstorms in Switzerland, 12z version (SWISS00) (*)
 
         This index is one of two versions of a forecasting index that was developed for use in forecasting
         thunderstorms in Switzerland (see Huntrieser et. al., WAF v.12 pgs. 108-125).  This version was
@@ -4558,7 +4574,7 @@ def swiss12(prof):
 
 def fin(prof, **kwargs):
     '''
-        FIN Index
+        FIN Index (*)
 
         Formulation taken from Ukkonen et. al. 2017, JAMC 56 pg. 2349
 
@@ -4599,7 +4615,7 @@ def fin(prof, **kwargs):
 
 def yon1(prof):
     '''
-        Yonetani Index, version 1
+        Yonetani Index, version 1 (*)
 
         This index, derived by T. Yonetani in 1979, was developed to help forecast thunderstorms
         over the Kanto Plains region of Japan.  It makes use of the environmental lapse rates at
@@ -4645,7 +4661,7 @@ def yon1(prof):
 
 def yon2(prof):
     '''
-        Yonetani Index, version 2
+        Yonetani Index, version 2 (*)
 
         This index is a modification of the original Yonetani Index that was developed in an effort
         to better predict thunderstorms over the island of Cyprus (see Jacovides and Yonetani 1990,
@@ -4718,7 +4734,7 @@ def fsi(prof):
 
 def fog_point(prof, pcl):
     '''
-        Fog Point
+        Fog Point (*)
 
         This value indicates the temperature at which radiation fog will form.  It is
         determined by following the saturation mixing ratio line from the dew point curve
@@ -4745,7 +4761,7 @@ def fog_point(prof, pcl):
 
 def fog_threat(prof, pcl):
     '''
-        Fog Threat
+        Fog Threat (*)
 
         This value indicates the potential for radiation fog.  It is calculated by
         subtracting the fog point from the 850 mb wet-bulb potential temperature.
@@ -4771,7 +4787,7 @@ def fog_threat(prof, pcl):
 
 def mvv(prof, pcl):
     '''
-        Maximum Vertical Velocity
+        Maximum Vertical Velocity (*)
 
         This is the maximum vertical velocity of the potential convective updraft.
         MVV is a function of CAPE.
@@ -4793,7 +4809,7 @@ def mvv(prof, pcl):
 
 def tsi(prof, pcl, hbot, htop, stu=0, stv=0):
     '''
-        Thunderstorm Severity Index
+        Thunderstorm Severity Index (*)
 
         This index is used to help measure and predict the severity of
         thunderstorm events, using a regression equation based around instability,
@@ -4835,7 +4851,7 @@ def tsi(prof, pcl, hbot, htop, stu=0, stv=0):
 
 def jli(prof):
     '''
-        Johnson Lag Index
+        Johnson Lag Index (*)
 
         Developed by D. L. Johnson in 1982, this index was based on a series of soundings
         made during experiments in the 1970s.  It is a parametric index that takes into
@@ -4872,7 +4888,7 @@ def jli(prof):
 
 def ncape(prof, pcl):
     '''
-        Normalized CAPE
+        Normalized CAPE (*)
 
         NCAPE is CAPE that is divided by the depth of the positive-buoyancy layer.  Values
         around or less than 0.1 suggest a relatively "skinny" CAPE profile with relatively
@@ -4899,7 +4915,7 @@ def ncape(prof, pcl):
 
 def ncinh(prof, pcl):
     '''
-        Normalized CINH
+        Normalized CINH (*)
 
         NCINH is CINH that is divided by the depth of the negative-buoyancy layer.  Values
         around or greater than -0.01 suggest a relatively "skinny" CINH profile that only
@@ -4926,7 +4942,7 @@ def ncinh(prof, pcl):
 
 def lsi(prof):
     '''
-        Lid Strength Index
+        Lid Strength Index (*)
 
         Formulation taken from Carson et. al. 1980, BAMS v.61 pg. 1022.
 
@@ -4969,7 +4985,7 @@ def lsi(prof):
 
 def mcsi1(prof, lat=35, **kwargs):
     '''
-        MCS Index, version 1
+        MCS Index, version 1 (*)
 
         Formulation taken from Jirak and Cotton 2007, WAF v.22 pg. 825.
 
@@ -5060,7 +5076,7 @@ def mcsi1(prof, lat=35, **kwargs):
 
 def mcsi2(prof, lat=35, **kwargs):
     '''
-        MCS Index, version 2
+        MCS Index, version 2 (*)
 
         Formulation taken from Jirak and Cotton 2009, WAF v.24 pg. 359.
 
@@ -5151,7 +5167,7 @@ def mcsi2(prof, lat=35, **kwargs):
 
 def cii1(prof):
     '''
-        Convective Instability Index, version 1
+        Convective Instability Index, version 1 (*)
 
         This index was developed by W. D. Bonner, R. M. Reap, and J. E. Kemper in 1971.  It uses
         the equivalent potential temperature (Theta-e) at the surface, 850 mb, and 700 mb levels.
@@ -5179,7 +5195,7 @@ def cii1(prof):
 
 def cii2(prof):
     '''
-        Convective Instability Index, version 2
+        Convective Instability Index, version 2 (*)
 
         This index was derived by D. A. Barber in 1975.  It subtracts the average Theta-e value in
         the 600-500 mb layer from the average Theta-e value in the lowest 100 mb.  Values >= 0
@@ -5207,7 +5223,7 @@ def cii2(prof):
 
 def cpst1(mlcape, bwd6, srh03, mlcinh):
     '''
-        Conditional Probability of a Significant Tornado, version 1
+        Conditional Probability of a Significant Tornado, version 1 (*)
 
         This equation is one of three that were derived in Togstead et. al., Weather and
         Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
@@ -5246,7 +5262,7 @@ def cpst1(mlcape, bwd6, srh03, mlcinh):
 
 def cpst2(mlcape, bwd6, bwd1, mlcinh):
     '''
-        Conditional Probability of a Significant Tornado, version 2
+        Conditional Probability of a Significant Tornado, version 2 (*)
 
         This equation is one of three that were derived in Togstead et. al., Weather and
         Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
@@ -5285,7 +5301,7 @@ def cpst2(mlcape, bwd6, bwd1, mlcinh):
 
 def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
     '''
-        Conditional Probability of a Significant Tornado, version 3
+        Conditional Probability of a Significant Tornado, version 3 (*)
 
         This equation is one of three that were derived in Togstead et. al., Weather and
         Forecasting 2011 p. 729-743, as part of an effort to develop logistic regression
@@ -5332,7 +5348,7 @@ def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
 
 def tie(prof):
     '''
-        Tornado Intensity Equation
+        Tornado Intensity Equation (*)
 
         Formulation taken from Colquhoun and Riley 1996, WAF v.11 pg. 367.
 
