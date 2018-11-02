@@ -2931,7 +2931,7 @@ def dcp(prof):
     sfc = prof.pres[prof.sfc]
     p6km = interp.pres(prof, interp.to_msl(prof, 6000.))
     dcape_val = getattr(prof, 'dcape', dcape( prof )[0])
-    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=1))
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
     sfc_6km_shear = getattr(prof, 'sfc_6km_shear', winds.wind_shear(prof, pbot=sfc, ptop=p6km))
     mean_6km = getattr(prof, 'mean_6km', utils.comp2vec(*winds.mean_wind(prof, pbot=sfc, ptop=p6km)))
     mag_shear = utils.mag(sfc_6km_shear[0], sfc_6km_shear[1])
@@ -3877,6 +3877,7 @@ def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
 
     tddsfc = thermo.ctof(prof.tmpc[prof.sfc]) - thermo.ctof(prof.dwpc[prof.sfc])
     sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
 
     mlpcl = kwargs.get('mlpcl', None)
     if not mlpcl:
@@ -3887,11 +3888,10 @@ def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     
     if sbcape > mlcape and mllcl < 1000 and tddsfc <= 10:
         capef = sbcape
-        cape4 = sbpcl.b4km
     else:
         capef = mlcape
-        cape4 = mlpcl.b4km
     
+    cape4 = mupcl.b4km
     wmax4 = ( 2 * cape4 ) ** 0.5
 
     if bwd6 > 30:
@@ -4572,7 +4572,7 @@ def swiss12(prof):
 
     return swiss12
 
-def fin(prof, **kwargs):
+def fin(prof):
     '''
         FIN Index (*)
 
@@ -4593,13 +4593,7 @@ def fin(prof, **kwargs):
     '''
     
     # Calculate MULI
-    mupcl = kwargs.get('mupcl', None)
-    if not mupcl:
-        try:
-            mupcl = prof.mupcl
-        except:
-            mulplvals = DefineParcel(prof, flag=3, pres=300)
-            mupcl = cape(prof, lplvals=mulplvals)
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
     muli = mupcl.li5
 
     # Calculate 700 mb dewpoint depression
@@ -4983,7 +4977,7 @@ def lsi(prof):
 
     return lsi
 
-def mcsi1(prof, lat=35, **kwargs):
+def mcsi1(prof, lat=35):
     '''
         MCS Index, version 1 (*)
 
@@ -5014,17 +5008,13 @@ def mcsi1(prof, lat=35, **kwargs):
     '''
 
     # Calculate LI
-    mupcl = kwargs.get('mupcl', None)
-    if not mupcl:
-        try:
-            mupcl = prof.mupcl
-        except:
-            mulplvals = DefineParcel(prof, flag=3, pres=300)
-            mupcl = cape(prof, lplvals=mulplvals)
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
     muli = mupcl.li5
 
     # Calculate shear
-    mag03_shr = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear))
+    p3km = interp.pres(prof, interp.to_msl(prof, 3000))
+    sfc_pres = prof.pres[prof.sfc]
+    mag03_shr = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
 
     # Calculate 700 mb temperature advection
     omega = (2. * np.pi) / (86164.)
@@ -5074,7 +5064,7 @@ def mcsi1(prof, lat=35, **kwargs):
 
     return mcsi1
 
-def mcsi2(prof, lat=35, **kwargs):
+def mcsi2(prof, lat=35):
     '''
         MCS Index, version 2 (*)
 
@@ -5105,17 +5095,13 @@ def mcsi2(prof, lat=35, **kwargs):
     '''
 
     # Calculate LI
-    mupcl = kwargs.get('mupcl', None)
-    if not mupcl:
-        try:
-            mupcl = prof.mupcl
-        except:
-            mulplvals = DefineParcel(prof, flag=3, pres=300)
-            mupcl = cape(prof, lplvals=mulplvals)
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
     muli = mupcl.li5
 
     # Calculate shear
-    mag03_shr = utils.KTS2MS(utils.mag(*prof.sfc_3km_shear))
+    p3km = interp.pres(prof, interp.to_msl(prof, 3000))
+    sfc_pres = prof.pres[prof.sfc]
+    mag03_shr = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
 
     # Calculate 700 mb temperature advection
     omega = (2. * np.pi) / (86164.)
