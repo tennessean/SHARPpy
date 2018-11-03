@@ -193,10 +193,10 @@ def norm_wind_shear(prof, pbot=850, ptop=250):
     nws : number
         Normalized wind shear (Thousandths of units per second)
     '''
-    ubot, vbot = utils.KTS2MS(interp.components(prof, pbot))
-    utop, vtop = utils.KTS2MS(interp.components(prof, ptop))
-    shu = utop - ubot
-    shv = vtop - vbot
+    ubot, vbot = interp.components(prof, pbot)
+    utop, vtop = interp.components(prof, ptop)
+    shu = utils.KTS2MS(utop - ubot)
+    shv = utils.KTS2MS(vtop - vbot)
     shr = utils.mag(shu, shv)
     hbot = interp.hght(prof, pbot)
     htop = interp.hght(prof, ptop)
