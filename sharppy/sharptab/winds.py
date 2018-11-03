@@ -7,7 +7,7 @@ from sharppy.sharptab.constants import *
 import warnings
 
 __all__ = ['mean_wind', 'mean_wind_npw', 'mean_wind_old', 'mean_wind_npw_old']
-__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'helicity', 'max_wind']
+__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'norm_wind_shear', 'helicity', 'max_wind']
 __all__ += ['non_parcel_bunkers_motion', 'corfidi_mcs_motion', 'mbe_vectors']
 __all__ += ['non_parcel_bunkers_motion_experimental', 'critical_angle']
 
@@ -149,7 +149,7 @@ def sr_wind_npw(prof, pbot=850, ptop=250, stu=0, stv=0, dp=-1):
 
 def wind_shear(prof, pbot=850, ptop=250):
     '''
-    Calculates the shear between the wind at (pbot) and (ptop).
+    Calculates the bulk shear between the wind at (pbot) and (ptop).
 
     Parameters
     ----------
@@ -173,6 +173,36 @@ def wind_shear(prof, pbot=850, ptop=250):
     shu = utop - ubot
     shv = vtop - vbot
     return shu, shv
+
+def norm_wind_shear(prof, pbot=850, ptop=250):
+    '''
+    Calculates the bulk shear between the wind at (pbot) and (ptop), normalized
+    by dividing by the thickness of the layer.
+
+    Parameters
+    ----------
+    prof: profile object
+        Profile object
+    pbot : number (optional; default 850 hPa)
+        Pressure of the bottom level (hPa)
+    ptop : number (optional; default 250 hPa)
+        Pressure of the top level (hPa)
+
+    Returns
+    -------
+    nws : number
+        Normalized wind shear (Thousandths of units per second)
+    '''
+    ubot, vbot = utils.KTS2MS(interp.components(prof, pbot))
+    utop, vtop = utils.KTS2MS(interp.components(prof, ptop))
+    shu = utop - ubot
+    shv = vtop - vbot
+    shr = utils.mag(shu, shv)
+    hbot = interp.hght(prof, pbot)
+    htop = interp.hght(prof, ptop)
+    thickness = htop - hbot
+    nws = shr / thickness
+    return nws
 
 def non_parcel_bunkers_motion_experimental(prof):
     '''

@@ -22,7 +22,7 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_relh']
+__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
@@ -830,6 +830,71 @@ def inferred_temp_adv(prof, lat=35):
         temp_adv[i-1] = t_adv*60.*60. # Converts Kelvin/seconds to Kelvin/hour (or Celsius/hour)
 
     return temp_adv, pressure_bounds
+
+
+def inversion(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Finds the layers where temperature inversions are occurring.
+
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default top of sounding)
+        Pressure of the top level (hPa).
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        inv_bot : An array of bases of inversion layers
+        inv_top : An array of tops of inversion layers
+    '''
+
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.top]
+    
+    if not utils.QC(interp.vtmp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.vtmp(prof, ptop)): return ma.masked
+    
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        vtmp1 = interp.vtmp(prof, pbot)
+        vtmp2 = interp.vtmp(prof, ptop)
+        hght1 = interp.hght(prof, pbot)
+        hght2 = interp.hght(prof, ptop)
+        mask = ~prof.vtmp.mask[ind1:ind2+1] * ~prof.hght.mask[ind1:ind2+1]
+        vtmp = np.concatenate([[vtmp1], prof.vtmp[ind1:ind2+1][mask], [vtmp2]])
+        hght = np.concatenate([[hght1], prof.hght[ind1:ind2+1][mask], [hght2]])
+    else:
+        ps = np.arange(pbot, ptop+dp, dp)
+        vtmp = interp.vtmp(prof, ps)
+        hght = interp.hght(prof, ps)
+    
+    lr = ((vtmp[1:] - vtmp[:-1]) / (hght[1:] - hght[:-1])) * -1000
+    ind3 = ma.where(lr < 0)[0]
+
+    if exact:
+        ind4bot = ind3 + ind1 - 1
+        ind4top = ind3 + ind1
+        inv_bot = prof.pres[ind4bot]
+        inv_top = prof.pres[ind4top]
+    else:
+        ind4 = ma.where(ind3[1:] - ind3[:-1] > 1)[0]
+        ind4bot = ind3[ind4+1]
+        ind4bot = ma.append(ind3[0], ind4bot)
+        ind4top = ind3[ind4]
+        ind4top = ma.append(ind4top, ind3.max())
+        inv_bot = ps[ind4bot]
+        inv_top = ps[ind4top]
+    
+    return inv_bot, inv_top
 
 
 def temp_lvl(prof, temp):
