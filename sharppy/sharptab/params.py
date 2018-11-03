@@ -37,6 +37,7 @@ __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
 __all__ += ['tie']
+__all__ += ['t1_gust']
 
 class DefineParcel(object):
     '''
@@ -3387,6 +3388,8 @@ def wbz(prof):
 
         Returns
         -------
+        wbp : mb
+            Wetbulb Zero (mb)
         wbz : feet
             Wetbulb Zero (feet AGL)
     '''
@@ -3411,7 +3414,7 @@ def wbz(prof):
     
     wbz = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbp)))
     
-    return wbz
+    return wbp, wbz
 
 def thomp(prof, pcl):
     '''
@@ -5425,3 +5428,70 @@ def tie(prof):
     tie = ( -0.145 * sli ) + ( 0.136 * sfc_600mb_shr ) - 1.5
 
     return tie
+
+def t1_gust(prof):
+    '''
+        T1 Gust (*)
+
+        Formulation taken from 
+	    Notes on Analysis and Severe-Storm Forecasting Procedures of the Air Force Global Weather Central, 1972
+	    by RC Miller.
+
+        This parameter estimates the maximum average wind gusts.  If the sounding has an inversion
+        layer with a top less than 200 mb above the ground, then the maximum temperature in the
+        inversion is moist adiabatically lifted to 600 mb; if no inversion is present or if the top
+        of the inversion is above 200 mb above the ground, then the maximum forecast surface
+        temperature is moist adiabatically lifted to 600 mb.  In either case, the lifted temperature
+        is subrtacted from the 600 mb ambient temperature; the square root of the difference is then
+        multiplied by 13 to get the likely T1 Average Gust.
+
+        The maximum peak gust is calculated by adding one third (1/3) of the mean wind in the lower
+        5,000 feet AGL to the T1 Average Gust value.
+
+        For the direction of the gusts, the mean wind direction in the level from 10,000 to 14,000
+        feet AGL is used.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        t1_avg : knots
+            T1 Average Gust (knots)
+        t1_peak : knots
+            T1 Peak Gust (knots)
+        t1_dir
+            T1 Gust Direction (degrees)
+    '''
+
+    inv_top = getattr(prof, 'inversion', inversion(prof, pbot=None, ptop=600)[1][0])
+    sfc_pres = prof.pres[prof.sfc]
+
+    if not utils.QC(inv_top) or inv_top < sfc_pres - 200:
+        max_tmp = getattr(prof, 'max_temp', max_temp(prof))
+        max_tmp_pcl = thermo.wetlift(sfc_pres, max_tmp, 600)
+    else:
+        idx = np.logical_and(inv_top >= prof.pres, prof.pres >= 600)
+        max_idx = np.ma.argmax(prof.tmpc[idx])
+        max_pres = prof.pres[idx][max_idx]
+        max_tmp = prof.tmpc[idx][max_idx]
+        max_tmp_pcl = thermo.wetlift(max_pres, max_tmp, 600)
+    
+    tmp600 = interp.temp(prof, 600)
+    t1_diff = max_tmp_pcl - tmp600
+
+    t1_avg = 13 * (t1_diff ** 0.5)
+    
+    pres5k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(5000)))
+    mn_wd_5k = utils.mag(*winds.mean_wind(prof, pbot=sfc_pres, ptop=pres5k))
+    
+    t1_peak = t1_avg + ( mn_wd_5k / 3 )
+
+    pres10k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(10000)))
+    pres14k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(14000)))
+
+    mn_wd_10_14 = winds.mean_wind(prof, pbot=pres10k, ptop=pres14k)
+    t1_dir = utils.comp2vec(mn_wd_10_14[0], mn_wd_10_14[1])[0]
+
+    return t1_avg, t1_peak, t1_dir
