@@ -4229,6 +4229,7 @@ def windex2(prof, **kwargs):
 
     frz_lvl = kwargs.get('frz_lvl', None)
     sfc_pres = prof.pres[prof.sfc]
+    max_tmp = getattr(prof, 'max_temp', max_temp(prof))
     max_dpt = thermo.temp_at_mixrat(mean_mixratio(prof, sfc_pres, sfc_pres - 100, exact=True), sfc_pres)
     max_vtp = thermo.virtemp(sfc_pres, max_tmp, max_dpt)
     pres_1km = interp.pres(prof, interp.to_msl(prof, 1000))
