@@ -3944,7 +3944,6 @@ def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     '''
 
     tddsfc = thermo.ctof(prof.tmpc[prof.sfc]) - thermo.ctof(prof.dwpc[prof.sfc])
-    sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
     mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
 
     mlpcl = kwargs.get('mlpcl', None)
@@ -4268,15 +4267,15 @@ def dmpi2(prof):
             Dry Microburst Potential Index, version 2 (number)
     '''
 
-    lvl5 = interp.to_msl(prof, utils.FT2M(5000))
-    lvl13 = interp.to_msl(prof, utils.FT2M(13000))
-    pres5 = interp.pres(prof, lvl5)
-    pres13 = interp.pres(prof, lvl13)
-    tdd5 = interp.tdd(prof, pres5)
-    tdd13 = interp.tdd(prof, pres13)
-    lr_513 = lapse_rate(prof, lvl5, lvl13, pres=False)
+    lvl5k = interp.to_msl(prof, utils.FT2M(5000))
+    lvl13k = interp.to_msl(prof, utils.FT2M(13000))
+    pres5k = interp.pres(prof, lvl5k)
+    pres13k = interp.pres(prof, lvl13k)
+    tdd5k = interp.tdd(prof, pres5k)
+    tdd13k = interp.tdd(prof, pres13k)
+    lr_5k_13k = lapse_rate(prof, lvl5k, lvl13k, pres=False)
 
-    dmpi2 = lr_513 + tdd5 - tdd13
+    dmpi2 = lr_5k_13k + tdd5k - tdd13k
 
     return dmpi2
 
@@ -4348,7 +4347,6 @@ def mdpi(prof):
             Microburst Day Potential Index (number)
     '''
     
-    thetae = getattr(prof, 'thetae', prof.get_thetae_profile())
     sfc_pres = prof.pres[prof.sfc]
     upr_pres = sfc_pres - 150.
     
@@ -4474,11 +4472,11 @@ def csv(prof):
             "C" Stability Value (number)
     '''
 
-    theta850 = thermo.theta(850, interp.temp(prof, 850))
-    wtlft86 = thermo.wetlift(1000, theta850, 600)
-    tmp600 = interp.temp(prof, 600)
+    thetv850 = thermo.theta(850, interp.vtmp(prof, 850))
+    wtlft86 = thermo.wetlift(1000, thetv850, 600)
+    vtp600 = interp.vtmp(prof, 600)
 
-    csv = wtlft86 - tmp600
+    csv = wtlft86 - vtp600
 
     return csv
 
@@ -5470,16 +5468,18 @@ def t1_gust(prof):
 
     if not utils.QC(inv_top) or inv_top < sfc_pres - 200:
         max_tmp = getattr(prof, 'max_temp', max_temp(prof))
-        max_tmp_pcl = thermo.wetlift(sfc_pres, max_tmp, 600)
+        max_dpt = thermo.temp_at_mixrat(mean_mixratio(prof, sfc_pres, sfc_pres - 100, exact=True), sfc_pres)
+        max_vtp = thermo.virtemp(sfc_pres, max_tmp, max_dpt)
+        max_vtp_pcl = thermo.wetlift(sfc_pres, max_vtp, 600)
     else:
         idx = np.logical_and(inv_top >= prof.pres, prof.pres >= 600)
         max_idx = np.ma.argmax(prof.tmpc[idx])
         max_pres = prof.pres[idx][max_idx]
-        max_tmp = prof.tmpc[idx][max_idx]
-        max_tmp_pcl = thermo.wetlift(max_pres, max_tmp, 600)
+        max_vtp = prof.vtmp[idx][max_idx]
+        max_vtp_pcl = thermo.wetlift(max_pres, max_vtp, 600)
     
-    tmp600 = interp.temp(prof, 600)
-    t1_diff = max_tmp_pcl - tmp600
+    vtp600 = interp.vtmp(prof, 600)
+    t1_diff = max_vtp_pcl - vtp600
 
     t1_avg = 13 * (t1_diff ** 0.5)
     
