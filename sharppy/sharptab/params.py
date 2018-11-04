@@ -3444,7 +3444,7 @@ def wbz(prof):
     wbzp = np.power(10, np.interp(0, [wetbulb[ind+1], wetbulb[ind]],
             [prof.logp[ind+1], prof.logp[ind]]))
     
-    wbzh = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbp)))
+    wbzh = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbzp)))
     
     return wbzp, wbzh
 
@@ -5262,12 +5262,16 @@ def lsi(prof):
 
     idx = ma.where(prof.pres >= 500)[0]
     max_idx = np.ma.argmax(thetaws[idx])
-    max_thetaws = thetaws[idx][max_idx]
     max_pres = prof.pres[idx][max_idx]
+
+    if max_pres < sfc_pres:
+        max_thetaws = thetaws[idx][max_idx]
+    else:
+        max_thetaws = thtw_lw
 
     thtws_up = mean_thetaws(prof, max_pres, 500)
 
-    lsi = ( thtws_up - thtw_lw ) + ( max_thetaws - thtw_lw )
+    lsi = ( thtw_lw - thtws_up ) - ( max_thetaws - thtw_lw )
 
     return lsi
 
