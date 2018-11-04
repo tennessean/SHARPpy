@@ -26,18 +26,18 @@ __all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
-__all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'cape']
+__all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'tei_sfc', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
-__all__ += ['windex', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi']
+__all__ += ['windex1', 'windex2', 'gustex1', 'gustex2', 'gustex3', 'gustex4', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi']
 __all__ += ['hi', 'ulii', 'ssi', 'csv', 'z_index', 'k_high1', 'k_high2', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
 __all__ += ['tie']
-__all__ += ['t1_gust']
+__all__ += ['t1_gust', 't2_gust']
 
 class DefineParcel(object):
     '''
@@ -2478,6 +2478,7 @@ def convective_temp(prof, **kwargs):
 def tei(prof):
     '''
         Theta-E Index (TEI)
+
         TEI is the difference between the surface theta-e and the minimum theta-e value
         in the lowest 400 mb AGL
        
@@ -2497,7 +2498,6 @@ def tei(prof):
         tei : theta-e index
         '''
     
-    sfc_theta = prof.thetae[prof.sfc]
     sfc_pres = prof.pres[prof.sfc]
     top_pres = sfc_pres - 400.
     
@@ -2505,8 +2505,40 @@ def tei(prof):
     min_thetae = ma.min(prof.thetae[layer_idxs])
     max_thetae = ma.max(prof.thetae[layer_idxs])
 
-    #tei = sfc_theta - min_thetae
     tei = max_thetae - min_thetae
+    return tei
+
+def tei_sfc(prof):
+    '''
+        Theta-E Index (TEI) (*)
+
+        TEI is the difference between the surface theta-e and the minimum theta-e value
+        in the lowest 400 mb AGL
+       
+        Note: This is the definition of TEI on the SPC help page,
+        but these calculations do not match up with the TEI values on the SPC Online Soundings.
+        The TEI values online are more consistent with the max Theta-E
+        minus the minimum Theta-E found in the lowest 400 mb AGL.
+
+        This is the original formulation of TEI.
+
+        Parameters
+        ----------
+        prof : Profile object
+        
+        Returns
+        -------
+        tei : theta-e index
+        '''
+    
+    sfc_theta = prof.thetae[prof.sfc]
+    sfc_pres = prof.pres[prof.sfc]
+    top_pres = sfc_pres - 400.
+    
+    layer_idxs = ma.where(prof.pres >= top_pres)[0]
+    min_thetae = ma.min(prof.thetae[layer_idxs])
+
+    tei = sfc_theta - min_thetae
     return tei
 
 def esp(prof, **kwargs):
@@ -3388,9 +3420,9 @@ def wbz(prof):
 
         Returns
         -------
-        wbp : mb
+        wbzp : mb
             Wetbulb Zero (mb)
-        wbz : feet
+        wbzh : feet
             Wetbulb Zero (feet AGL)
     '''
 
@@ -3409,12 +3441,12 @@ def wbz(prof):
     except:
         ind = ind1[-1]
     
-    wbp = np.power(10, np.interp(0, [wetbulb[ind+1], wetbulb[ind]],
+    wbzp = np.power(10, np.interp(0, [wetbulb[ind+1], wetbulb[ind]],
             [prof.logp[ind+1], prof.logp[ind]]))
     
-    wbz = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbp)))
+    wbzh = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbp)))
     
-    return wbp, wbz
+    return wbzp, wbzh
 
 def thomp(prof, pcl):
     '''
@@ -4129,12 +4161,16 @@ def snow(prof):
 
     return snow
 
-def windex(prof, **kwargs):
+def windex1(prof, **kwargs):
     '''
-        Wind Index (*)
+        Wind Index, version 1 (*)
 
         This index, a measure of microburst potential and downdraft instability, estimates maximum
         convective wind gust speeds.  Created by Donald McCann in 1994, the index is displayed in knots.
+
+        There are two main versiona available.  Version 1 uses the lapse rate from the observed surface
+        to the freezing level.  Version 2 uses the lapse rate from the maximum predicted surface
+        temperature to the freezing level.
 
         Parameters
         ----------
@@ -4142,8 +4178,8 @@ def windex(prof, **kwargs):
 
         Returns
         -------
-        windex : knots
-            WINDEX (knots)
+        windex1 : knots
+            WINDEX version 1 (knots)
     '''
 
     frz_lvl = kwargs.get('frz_lvl', None)
@@ -4166,9 +4202,207 @@ def windex(prof, **kwargs):
     else:
         rq = mxr01 / 12
 
-    windex = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
+    windex1 = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
 
-    return windex
+    return windex1
+
+def windex2(prof, **kwargs):
+    '''
+        Wind Index version 1 (*)
+
+        This index, a measure of microburst potential and downdraft instability, estimates maximum
+        convective wind gust speeds.  Created by Donald McCann in 1994, the index is displayed in knots.
+
+        There are two main versiona available.  Version 1 uses the lapse rate from the observed surface
+        to the freezing level.  Version 2 uses the lapse rate from the maximum predicted surface
+        temperature to the freezing level.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        windex2 : knots
+            WINDEX version 2 (knots)
+    '''
+
+    frz_lvl = kwargs.get('frz_lvl', None)
+    sfc_pres = prof.pres[prof.sfc]
+    max_dpt = thermo.temp_at_mixrat(mean_mixratio(prof, sfc_pres, sfc_pres - 100, exact=True), sfc_pres)
+    max_vtp = thermo.virtemp(sfc_pres, max_tmp, max_dpt)
+    pres_1km = interp.pres(prof, interp.to_msl(prof, 1000))
+    mxr01 = mean_mixratio(prof, pbot=sfc_pres, ptop=pres_1km)
+    
+    if not frz_lvl:
+        frz_lvl = interp.hght(prof, temp_lvl(prof, 0))
+    
+    frz_pres = interp.pres(prof, frz_lvl)
+    frz_dwpt = interp.dwpt(prof, frz_pres)
+    mxr_frz = thermo.mixratio(frz_pres, frz_dwpt)
+    hm_m = interp.to_agl(prof, frz_lvl)
+    hm_km = hm_m / 1000
+    frz_vtp = interp.vtmp(prof, frz_pres)
+    lr_frz = ( frz_vtp - max_vtp ) / -hm_km
+
+    if mxr01 > 12:
+        rq = 1
+    else:
+        rq = mxr01 / 12
+
+    windex2 = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
+
+    return windex2
+
+def gustex1(prof):
+    '''
+        Gust Index version 1 (*)
+
+        Formulation taken from Greer 2001, WAF v.16 pg. 266.
+
+        This index attempts to improve the WINDEX (q.v.) by multiplying it by an emperically
+        derived constant between 0 and 1, then adding a wind speed factor.
+
+        There are four versions known.  Versions 1 and 2 add half the 500 mb wind speed to 
+        the multiple of the WINDEX and the constant.  Version 1 uses WINDEX version 1.
+        Version 2 uses WINDEX version 2.
+
+        Versions 3 and 4 add the density-weighted mean wind speed between 1 and 4 km AGL.
+        Version 3 uses Windex version 1.  Version 4 uses WINDEX version 2.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        gustex1 : knots
+            GUSTEX version 1 (knots)
+    '''
+
+    windx1 = getattr(prof, 'windex1', windex1(prof))
+    mag500 = interp.vec(prof, 500)[1]
+
+    # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
+    const = 0.6
+
+    gustex1 = ( const * windx1 ) + ( mag500 / 2 )
+
+    return gustex1
+
+def gustex2(prof):
+    '''
+        Gust Index version 2 (*)
+
+        Formulation taken from Greer 2001, WAF v.16 pg. 266.
+
+        This index attempts to improve the WINDEX (q.v.) by multiplying it by an emperically
+        derived constant between 0 and 1, then adding a wind speed factor.
+
+        There are four versions known.  Versions 1 and 2 add half the 500 mb wind speed to 
+        the multiple of the WINDEX and the constant.  Version 1 uses WINDEX version 1.
+        Version 2 uses WINDEX version 2.
+
+        Versions 3 and 4 add the density-weighted mean wind speed between 1 and 4 km AGL.
+        Version 3 uses Windex version 1.  Version 4 uses WINDEX version 2.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        gustex2 : knots
+            GUSTEX version 2 (knots)
+    '''
+
+    windx2 = getattr(prof, 'windex2', windex2(prof))
+    mag500 = interp.vec(prof, 500)[1]
+
+    # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
+    const = 0.6
+
+    gustex2 = ( const * windx2 ) + ( mag500 / 2 )
+
+    return gustex2
+
+def gustex3(prof):
+    '''
+        Gust Index version 3 (*)
+
+        Formulation taken from Greer 2001, WAF v.16 pg. 266.
+
+        This index attempts to improve the WINDEX (q.v.) by multiplying it by an emperically
+        derived constant between 0 and 1, then adding a wind speed factor.
+
+        There are four versions known.  Versions 1 and 2 add half the 500 mb wind speed to 
+        the multiple of the WINDEX and the constant.  Version 1 uses WINDEX version 1.
+        Version 2 uses WINDEX version 2.
+
+        Versions 3 and 4 add the density-weighted mean wind speed between 1 and 4 km AGL.
+        Version 3 uses Windex version 1.  Version 4 uses WINDEX version 2.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        gustex3 : knots
+            GUSTEX version 3 (knots)
+    '''
+
+    windx1 = getattr(prof, 'windex1', windex1(prof))
+    pres1k = interp.pres(prof, interp.to_msl(prof, 1000))
+    pres4k = interp.pres(prof, interp.to_msl(prof, 4000))
+
+    mn_wd_1k_4k = utils.mag(*winds.mean_wind(prof, pbot=pres1k, ptop=pres4k))
+
+    # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
+    const = 0.6
+
+    gustex3 = ( const * windx1 ) + mn_wd_1k_4k
+
+    return gustex3
+
+def gustex4(prof):
+    '''
+        Gust Index version 4 (*)
+
+        Formulation taken from Greer 2001, WAF v.16 pg. 266.
+
+        This index attempts to improve the WINDEX (q.v.) by multiplying it by an emperically
+        derived constant between 0 and 1, then adding a wind speed factor.
+
+        There are four versions known.  Versions 1 and 2 add half the 500 mb wind speed to 
+        the multiple of the WINDEX and the constant.  Version 1 uses WINDEX version 1.
+        Version 2 uses WINDEX version 2.
+
+        Versions 3 and 4 add the density-weighted mean wind speed between 1 and 4 km AGL.
+        Version 3 uses Windex version 1.  Version 4 uses WINDEX version 2.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        gustex4 : knots
+            GUSTEX version 4 (knots)
+    '''
+
+    windx2 = getattr(prof, 'windex2', windex2(prof))
+    pres1k = interp.pres(prof, interp.to_msl(prof, 1000))
+    pres4k = interp.pres(prof, interp.to_msl(prof, 4000))
+
+    mn_wd_1k_4k = utils.mag(*winds.mean_wind(prof, pbot=pres1k, ptop=pres4k))
+
+    # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
+    const = 0.6
+
+    gustex4 = ( const * windx2 ) + mn_wd_1k_4k
+
+    return gustex4
 
 def wmsi(prof, **kwargs):
     '''
@@ -4190,9 +4424,7 @@ def wmsi(prof, **kwargs):
     '''
 
     mupcl = kwargs.get('mupcl', None)
-    sfc_theta = prof.thetae[prof.sfc]
-    sfc_pres = prof.pres[prof.sfc]
-    top_pres = sfc_pres - 400.
+    tei_s = getattr(prof, 'tei_sfc', tei_sfc(prof))
 
     if not mupcl:
         try:
@@ -4202,12 +4434,7 @@ def wmsi(prof, **kwargs):
             mupcl = cape(prof, lplvals=mulplvals)
     mucape = mupcl.bplus
 
-    layer_idxs = ma.where(prof.pres >= top_pres)[0]
-    min_thetae = ma.min(prof.thetae[layer_idxs])
-
-    dthetae = sfc_theta - min_thetae
-
-    wmsi = ( mucape * dthetae ) / 1000
+    wmsi = ( mucape * tei_s ) / 1000
 
     return wmsi
 
@@ -4304,12 +4531,12 @@ def hmi(prof):
 
     return hmi
 
-def mwpi(prof, pcl):
+def mwpi(prof, sbcape):
     '''
         Microburst Windspeed Potential Index (*)
 
         This index is designed to improve the Hybrid Microburst Index by adding a
-        term related to CAPE values.
+        term related to surface-based CAPE values.
 
         Parameters
         ----------
@@ -4324,7 +4551,7 @@ def mwpi(prof, pcl):
 
     hmi_t = getattr(prof, 'hmi', hmi(prof))
 
-    mwpi = ( pcl.bplus / 100 ) + hmi_t
+    mwpi = ( sbcape / 1000 ) + ( hmi_t / 5 )
 
     return mwpi
 
@@ -5008,7 +5235,7 @@ def lsi(prof):
 
         The Lid Strength Index was originally derived as an analogue for the Lifted Index,
         but as a way to measure the strength of the cap rather than stability.  It uses the
-        mean theta-w of the lowest 50 mb, the maximum theta-ws in the atmosphere below 500
+        mean theta-w of the lowest 100 mb, the maximum theta-ws in the atmosphere below 500
         mb, and the average theta-ws between the maximum theta-ws layer and 500 mb.
         
         Values below 1 indicate a very weak cap that would be easy to break; values between
@@ -5027,19 +5254,19 @@ def lsi(prof):
     '''
 
     sfc_pres = prof.pres[prof.sfc]
-    pres_50 = sfc_pres - 50
+    pres_100 = sfc_pres - 100
     thetaws = getattr(prof, 'thetaws', prof.get_thetaws_profile())
 
-    thtw_lw = mean_thetaw(prof, sfc_pres, pres_50)
+    thtw_lw = mean_thetaw(prof, sfc_pres, pres_100)
 
     idx = ma.where(prof.pres >= 500)[0]
     max_idx = np.ma.argmax(thetaws[idx])
     max_thetaws = thetaws[idx][max_idx]
     max_pres = prof.pres[idx][max_idx]
 
-    thtw_up = mean_thetaw(prof, max_pres, 500)
+    thtws_up = mean_thetaws(prof, max_pres, 500)
 
-    lsi = ( thtw_lw - thtw_up ) - ( max_thetaws - thtw_lw )
+    lsi = ( thtws_up - thtw_lw ) + ( max_thetaws - thtw_lw )
 
     return lsi
 
@@ -5459,7 +5686,7 @@ def t1_gust(prof):
             T1 Average Gust (knots)
         t1_peak : knots
             T1 Peak Gust (knots)
-        t1_dir
+        t1_dir : degrees
             T1 Gust Direction (degrees)
     '''
 
@@ -5484,14 +5711,94 @@ def t1_gust(prof):
     t1_avg = 13 * (t1_diff ** 0.5)
     
     pres5k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(5000)))
-    mn_wd_5k = utils.mag(*winds.mean_wind(prof, pbot=sfc_pres, ptop=pres5k))
+    mn_wd_sfc_5k = utils.mag(*winds.mean_wind(prof, pbot=sfc_pres, ptop=pres5k))
     
-    t1_peak = t1_avg + ( mn_wd_5k / 3 )
+    # If low-level wind speed data is unavailable, return only the average gust value.
+    if not utils.QC(mn_wd_sfc_5k):
+        t1_peak = t1_avg
+    else:
+        t1_peak = t1_avg + ( mn_wd_sfc_5k / 3 )
 
     pres10k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(10000)))
     pres14k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(14000)))
 
     mn_wd_10_14 = winds.mean_wind(prof, pbot=pres10k, ptop=pres14k)
-    t1_dir = utils.comp2vec(mn_wd_10_14[0], mn_wd_10_14[1])[0]
+
+    # If mid-level wind direction data is unavailable, return a value of 0 to represent variable (VRB) wind direction.
+    if not utils.QC(mn_wd_10_14):
+        t1_dir = 0
+    else:
+        t1_dir = utils.comp2vec(mn_wd_10_14[0], mn_wd_10_14[1])[0]
 
     return t1_avg, t1_peak, t1_dir
+
+def t2_gust(prof):
+    '''
+        T2 Gust (*)
+
+        Formulation taken from Fawbus and Miller 1954, BAMS v.35 pg. 14.
+
+        This parameter, which estimates maximum probable gusts, is most useful for isolated air-mass
+        thunderstorms and/or squall-line gust potential.  The moist adiabat at the Wetbulb Zero height
+        (q.v.) is followed down to the surface level, and the temperature read off from there.  It is
+        then subtracted from the surface temperature, and this difference is run through a non-linear
+        formula to calculate the probable average gust speed.  The minimum and maximum probable gusts
+        are derived by, respectively, subtracting and adding eight knots to the average gust speed.
+
+        Note that, unlike the T1 Gust (q.v.), the T2 Gust does not make use of the low-level wind speed
+        data; however, it still makes use of the mid-level wind direction data.
+
+         Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        t2_min : knots
+            T2 Minimum Gust (knots)
+        t2_avg : knots
+            T2 Agerage Gust (knots)
+        t2_max : knots
+            T2 Maximum Gust (knots)
+        t2_dir : degrees
+            T2 Gust Direction (degrees)
+    '''
+
+    wbzp = getattr(prof, 'wbz', wbz(prof)[0])
+    sfc_pres = prof.pres[prof.sfc]
+    sfc_vtp = prof.vtmp[prof.sfc]
+    sfc_wtb_pot = thermo.wetlift(wbzp, 0, sfc_pres)
+
+    tmp_diff = sfc_vtp - sfc_wtb_pot
+
+    peak_gust_avg = 7 + ( 3.06 * tmp_diff ) - ( 0.0073 * np.power(tmp_diff, 2) ) - ( 0.000284 * np.power(tmp_diff, 3) )
+    peak_gust_min = peak_gust_avg - 8
+    peak_gust_max = peak_gust_avg + 8
+
+    if peak_gust_min < 0:
+        t2_min = 0
+    else:
+        t2_min = peak_gust_min
+    
+    if peak_gust_avg < 0:
+        t2_avg = 0
+    else:
+        t2_avg = peak_gust_avg
+    
+    if peak_gust_max < 0:
+        t2_max = 0
+    else:
+        t2_max = peak_gust_max
+    
+    pres10k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(10000)))
+    pres14k = interp.pres(prof, interp.to_msl(prof, utils.FT2M(14000)))
+
+    mn_wd_10_14 = winds.mean_wind(prof, pbot=pres10k, ptop=pres14k)
+    
+    # If mid-level wind direction data is unavailable, return a value of 0 to represent variable (VRB) wind direction.
+    if not utils.QC(mn_wd_10_14):
+        t2_dir = 0
+    else:
+        t2_dir = utils.comp2vec(mn_wd_10_14[0], mn_wd_10_14[1])[0]
+    
+    return t2_min, t2_avg, t2_max, t2_dir
