@@ -132,10 +132,10 @@ def thetaw(p, t, td):
 def thetaws(p, t):
     '''
     Returns the saturation wetbulb potential temperature (C) of
-    a parcel. Unlike wetbulb potential temperature, which is a
-    function of pressure, temperature, and dewpoint, Theta-ws is
-    a function of pressure and temperature only and assumes the
-    parcel is completely saturated at the start.
+    a parcel. Unlike wetbulb potential temperature (Theta-w),
+    which is a function of pressure, temperature, and dewpoint,
+    Theta-ws is a function of pressure and temperature only and
+    assumes the parcel is completely saturated at the start.
 
     Parameters
     ----------

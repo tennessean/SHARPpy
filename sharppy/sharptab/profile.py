@@ -422,6 +422,27 @@ class BasicProfile(Profile):
         thetaws.set_fill_value(self.missing)
         return thetaws
     
+    def get_thetawv_profile(self):
+        '''
+            Function to calculate the profile of the
+            virtual temperature lowered moist-
+            adiabatically to 1000 mb (theta-wv).
+            
+            Parameters
+            ----------
+            None
+            
+            Returns
+            -------
+            Array of theta-ws profile
+            '''
+        thetawv = ma.empty(self.pres.shape[0])
+        for i in range(len(self.v)):
+            thetawv[i] = thermo.thetaws(self.pres[i], self.vtmp[i])
+        thetawv[thetawv == self.missing] = ma.masked
+        thetawv.set_fill_value(self.missing)
+        return thetawv
+    
     def get_thetae_profile(self):
         '''
             Function to calculate the theta-e profile.

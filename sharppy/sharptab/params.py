@@ -22,7 +22,7 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_relh']
+__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_thetawv', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
@@ -32,7 +32,7 @@ __all__ += ['spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko
 __all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['windex1', 'windex2', 'gustex1', 'gustex2', 'gustex3', 'gustex4', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi']
-__all__ += ['hi', 'ulii', 'ssi', 'csv', 'z_index', 'k_high1', 'k_high2', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
+__all__ += ['hi', 'ulii', 'ssi', 'fmi', 'csv', 'z_index', 'k_high1', 'k_high2', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
 __all__ += ['cpst1', 'cpst2', 'cpst3']
@@ -1354,6 +1354,57 @@ def mean_thetaws(prof, pbot=None, ptop=None, dp=-1, exact=False):
            thetaws[i] = thermo.thetaws(p[i], temp[i])
         thtaws = ma.average(thetaws, weights=p)
     return thtaws
+
+def mean_thetawv(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Calculates the mean virtual wetbulb potential temperature (theta-wv)
+        from a profile object within the specified layer.
+        
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default 400 hPa)
+        Pressure of the top level (hPa)
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        Mean Theta-WS
+        
+        '''
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.sfc] - 100.
+    if not utils.QC(interp.vtmp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.vtmp(prof, ptop)): return ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        thetawv1 = thermo.thetaws(pbot, interp.vtmp(prof, pbot))
+        thetawv2 = thermo.thetaws(ptop, interp.vtmp(prof, ptop))
+        thetawv = np.ma.empty(prof.pres[ind1:ind2+1].shape)
+        for i in np.arange(0, len(thetawv), 1):
+            thetawv[i] = thermo.thetaws(prof.pres[ind1:ind2+1][i],  prof.vtmp[ind1:ind2+1][i])
+        mask = ~thetawv.mask
+        thetawv = np.concatenate([[thetawv1], thetawv[mask], thetawv[mask], [thetawv2]])
+        tott = thetawv.sum() / 2.
+        num = float(len(thetawv)) / 2.
+        thtawv = tott / num
+    else:
+        dp = -1
+        p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
+        vtmp = interp.vtmp(prof, p)
+        thetawv = np.empty(p.shape)
+        for i in np.arange(0, len(thetawv), 1):
+           thetawv[i] = thermo.thetaws(p[i], vtmp[i])
+        thtawv = ma.average(thetawv, weights=p)
+    return thtawv
 
 def lapse_rate(prof, lower, upper, pres=True):
     '''
@@ -4680,6 +4731,41 @@ def ssi(prof):
 
     return ssi
 
+def fmi(prof):
+    '''
+        Fawbush-Miller Index (*)
+
+        This index is roughly similar to the Lifted Index; however, instead of lifting a parcel to 500 mb and
+        comparing it to the environmental ambient temperature, it instead compares the average theta-w of the
+        lowest 100 mb layer and comparing it with the environmental theta-ws at 500 mb.
+
+        Negative values indicate increasing chances for convective and even severe weather.
+
+        The version used here makes use of the virtual temperature correction.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        fmi : number
+            Fawbush-Miller Index (number)
+    '''
+
+    sfc_pres = prof.pres[prof.sfc]
+    pres_top = sfc_pres - 100
+    
+    ml_thtw = mean_thetaw(prof, pbot=sfc_pres, ptop=pres_top)
+    thtws500 = thermo.thetaws(500, interp.vtmp(prof, 500))
+    lift_ml_thtw = thermo.wetlift(1000, ml_thtw, 500)
+    vt_pcl500 = thermo.virtemp(500, lift_ml_thtw, lift_ml_thtw)
+    vt_thtws = thermo.thetaws(500, vt_pcl500)
+    
+    fmi = thtws500 - vt_thtws
+
+    return fmi
+
 def csv(prof):
     '''
         "C" Stability Value (*)
@@ -5256,22 +5342,29 @@ def lsi(prof):
 
     sfc_pres = prof.pres[prof.sfc]
     pres_100 = sfc_pres - 100
-    thetaws = getattr(prof, 'thetaws', prof.get_thetaws_profile())
+    thetawv = getattr(prof, 'thetawv', prof.get_thetawv_profile())
 
-    thtw_lw = mean_thetaw(prof, sfc_pres, pres_100)
+    ml_thtw = mean_thetaw(prof, sfc_pres, pres_100)
+    ml_pcl500 = thermo.wetlift(1000, ml_thtw, 500)
+    vt_pcl500 = thermo.virtemp(500, ml_pcl500, ml_pcl500)
+    thtw_vt500 = thermo.thetaws(500, vt_pcl500)
 
     idx = ma.where(prof.pres >= 500)[0]
-    max_idx = np.ma.argmax(thetaws[idx])
+    max_idx = np.ma.argmax(thetawv[idx])
     max_pres = prof.pres[idx][max_idx]
 
+    ml_pcl_max = thermo.wetlift(1000, ml_thtw, max_pres)
+    vt_pcl_max = thermo.virtemp(max_pres, ml_pcl_max, ml_pcl_max)
+    thtw_vt_max = thermo.thetaws(max_pres, vt_pcl_max)
+
     if max_pres < sfc_pres:
-        max_thetaws = thetaws[idx][max_idx]
+        max_thetawv = thetawv[idx][max_idx]
     else:
-        max_thetaws = thtw_lw
+        max_thetawv = thtw_vt_max
 
-    thtws_up = mean_thetaws(prof, max_pres, 500)
+    thtwv_up = mean_thetawv(prof, max_pres, 500)
 
-    lsi = ( thtw_lw - thtws_up ) - ( max_thetaws - thtw_lw )
+    lsi = ( thtw_vt500 - thtwv_up ) - ( max_thetawv - thtw_vt_max )
 
     return lsi
 
