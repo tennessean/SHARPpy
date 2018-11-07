@@ -22,20 +22,20 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_mixratio', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_thetawv', 'mean_relh']
+__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_mixratio', 'mean_wetbulb', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_thetawv', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
-__all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherb', 'tei', 'tei_sfc', 'cape']
+__all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherbs3_v1', 'sherbs3_v2', 'sherbe_v1', 'sherbe_v2', 'tei', 'tei_sfc', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
-__all__ += ['esi', 'vgp', 'aded1', 'aded2', 'ei', 'eehi', 'vtp']
+__all__ += ['esi', 'vgp', 'aded_v1', 'aded_v2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
-__all__ += ['windex1', 'windex2', 'gustex1', 'gustex2', 'gustex3', 'gustex4', 'wmsi', 'dmpi1', 'dmpi2', 'hmi', 'mwpi']
-__all__ += ['hi', 'ulii', 'ssi', 'fmi', 'csv', 'z_index', 'k_high1', 'k_high2', 'swiss00', 'swiss12', 'fin', 'yon1', 'yon2']
+__all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
+__all__ += ['hi', 'ulii', 'ssi', 'fmi', 'csv', 'z_index', 'k_high_v1', 'k_high_v2', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi1', 'mcsi2', 'cii1', 'cii2']
-__all__ += ['cpst1', 'cpst2', 'cpst3']
+__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2']
+__all__ += ['cpst_v1', 'cpst_v2', 'cpst_v3']
 __all__ += ['tie']
 __all__ += ['t1_gust', 't2_gust']
 
@@ -833,7 +833,7 @@ def inferred_temp_adv(prof, lat=35):
     return temp_adv, pressure_bounds
 
 
-def inversion(prof, pbot=None, ptop=None, dp=-1, exact=False):
+def inversion(prof, pbot=None, ptop=None):
     '''
         Finds the layers where temperature inversions are occurring.
 
@@ -845,11 +845,6 @@ def inversion(prof, pbot=None, ptop=None, dp=-1, exact=False):
         Pressure of the bottom level (hPa)
         ptop : number (optional; default top of sounding)
         Pressure of the top level (hPa).
-        dp : negative integer (optional; default = -1)
-        The pressure increment for the interpolated sounding
-        exact : bool (optional; default = False)
-        Switch to choose between using the exact data (slower) or using
-        interpolated sounding at 'dp' pressure levels (faster)
         
         Returns
         -------
@@ -863,37 +858,23 @@ def inversion(prof, pbot=None, ptop=None, dp=-1, exact=False):
     if not utils.QC(interp.vtmp(prof, pbot)): pbot = prof.pres[prof.sfc]
     if not utils.QC(interp.vtmp(prof, ptop)): return ma.masked
     
-    if exact:
-        ind1 = np.where(pbot > prof.pres)[0].min()
-        ind2 = np.where(ptop < prof.pres)[0].max()
-        vtmp1 = interp.vtmp(prof, pbot)
-        vtmp2 = interp.vtmp(prof, ptop)
-        hght1 = interp.hght(prof, pbot)
-        hght2 = interp.hght(prof, ptop)
-        mask = ~prof.vtmp.mask[ind1:ind2+1] * ~prof.hght.mask[ind1:ind2+1]
-        vtmp = np.concatenate([[vtmp1], prof.vtmp[ind1:ind2+1][mask], [vtmp2]])
-        hght = np.concatenate([[hght1], prof.hght[ind1:ind2+1][mask], [hght2]])
-    else:
-        ps = np.arange(pbot, ptop+dp, dp)
-        vtmp = interp.vtmp(prof, ps)
-        hght = interp.hght(prof, ps)
-    
+    ind1 = np.where(pbot > prof.pres)[0].min()
+    ind2 = np.where(ptop < prof.pres)[0].max()
+    vtmp1 = interp.vtmp(prof, pbot)
+    vtmp2 = interp.vtmp(prof, ptop)
+    hght1 = interp.hght(prof, pbot)
+    hght2 = interp.hght(prof, ptop)
+    mask = ~prof.vtmp.mask[ind1:ind2+1] * ~prof.hght.mask[ind1:ind2+1]
+    vtmp = np.concatenate([[vtmp1], prof.vtmp[ind1:ind2+1][mask], [vtmp2]])
+    hght = np.concatenate([[hght1], prof.hght[ind1:ind2+1][mask], [hght2]])
+
     lr = ((vtmp[1:] - vtmp[:-1]) / (hght[1:] - hght[:-1])) * -1000
     ind3 = ma.where(lr < 0)[0]
 
-    if exact:
-        ind4bot = ind3 + ind1 - 1
-        ind4top = ind3 + ind1
-        inv_bot = prof.pres[ind4bot]
-        inv_top = prof.pres[ind4top]
-    else:
-        ind4 = ma.where(ind3[1:] - ind3[:-1] > 1)[0]
-        ind4bot = ind3[ind4+1]
-        ind4bot = ma.append(ind3[0], ind4bot)
-        ind4top = ind3[ind4]
-        ind4top = ma.append(ind4top, ind3.max())
-        inv_bot = ps[ind4bot]
-        inv_top = ps[ind4top]
+    ind4bot = ind3 + ind1 - 1
+    ind4top = ind3 + ind1
+    inv_bot = prof.pres[ind4bot]
+    inv_top = prof.pres[ind4top]
     
     return inv_bot, inv_top
 
@@ -1047,7 +1028,7 @@ def mean_omega(prof, pbot=None, ptop=None, dp=-1, exact=False):
         omeg = np.concatenate([[omeg1], omeg[mask], omeg[mask], [omeg2]])
         tott = omeg.sum() / 2.
         num = float(len(omeg)) / 2.
-        thta = tott / num
+        omeg = tott / num
     else:
         dp = -1
         p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
@@ -1102,6 +1083,58 @@ def mean_mixratio(prof, pbot=None, ptop=None, dp=-1, exact=False):
         dwpt = interp.dwpt(prof, p)
         w = ma.average(thermo.mixratio(p, dwpt))
     return w
+
+def mean_wetbulb(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Calculates the mean wetbulb temperature from a profile object within the
+        specified layer.
+        
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default 400 hPa)
+        Pressure of the top level (hPa)
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        Mean Wetbulb temperature
+        
+        '''
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.sfc] - 100.
+    if not utils.QC(interp.temp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.temp(prof, ptop)): return ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        wetbulb1 = thermo.wetbulb(pbot, interp.temp(prof, pbot), interp.dwpt(prof, pbot))
+        wetbulb2 = thermo.wetbulb(ptop, interp.temp(prof, ptop), interp.dwpt(prof, pbot))
+        wetbulb = np.ma.empty(prof.pres[ind1:ind2+1].shape)
+        for i in np.arange(0, len(wetbulb), 1):
+            wetbulb[i] = thermo.wetbulb(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i], prof.dwpc[ind1:ind2+1][i])
+        mask = ~wetbulb.mask
+        wetbulb = np.concatenate([[wetbulb1], wetbulb[mask], wetbulb[mask], [wetbulb2]])
+        tott = wetbulb.sum() / 2.
+        num = float(len(wetbulb)) / 2.
+        wtb = tott / num
+    else:
+        dp = -1
+        p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
+        temp = interp.temp(prof, p)
+        dwpt = interp.dwpt(prof, p)
+        wetbulb = np.empty(p.shape)
+        for i in np.arange(0, len(wetbulb), 1):
+           wetbulb[i] = thermo.wetbulb(p[i], temp[i], dwpt[i])
+        wtb = ma.average(wetbulb, weights=p)
+    return wtb
 
 def mean_thetae(prof, pbot=None, ptop=None, dp=-1, exact=False):
     '''
@@ -2627,9 +2660,9 @@ def esp(prof, **kwargs):
     
     return esp
 
-def sherb(prof, **kwargs):
+def sherbs3_v1(prof, **kwargs):
     '''
-        Severe Hazards In Environments with Reduced Buoyancy (SHERB) Parameter (*)
+        Severe Hazards In Environments with Reduced Buoyancy (SHERB) Parameter, 0-3km AGL shear (SHERBS3), version 1 (*)
 
         A composite parameter designed to assist forecasters in the High-Shear
         Low CAPE (HSLC) environment.  This allows better discrimination 
@@ -2638,82 +2671,178 @@ def sherb(prof, **kwargs):
         It can detect significant tornadoes and significant winds.  Values above
         1 are more likely associated with significant severe.
 
-        See Sherburn et. al. 2014 WAF for more information
+        See Sherburn et. al. 2014, WAF v.29 pgs. 854-877 for more information.
+
+        There are two versions: Version 1 is the original computation, which uses
+        the 700-500 mb lapse rate as part of its computation.  Sherburn et. al.
+        2016, WAF v.31 pgs. 1899-1927 created a new version (Version 2) that
+        replaces the 700-500 mb lapse rate with the 3-5 km AGL lapse rate, and
+        recommends using this instead.
 
         REQUIRES (if effective==True): The effective inflow layer be defined
 
         Parameters
         ----------
         prof : Profile object
-        effective : True or False...use the effective layer computation or not
-                    the effective bulk wind difference (prof.ebwd) must exist first
-                    if not specified it will default to False (optional)
-        ebottom : bottom of the effective inflow layer (mb) (optional) 
-        etop :top of the effective inflow layer (mb) (optional) 
-        mupcl : Most-Unstable Parcel (optional)
 
         Returns
         -------
-        sherb : an integer for the SHERB parameter
-                if effective==True and an effective inflow layer cannot be found,
-                this function returns prof.missing
-
+        sherbs3_v1 : an integer for the SHERB parameter
         '''
-
-    effective = kwargs.get('effective', False)
-    ebottom = kwargs.get('ebottom', None)
-    etop = kwargs.get('etop', None)
 
     lr03 = lapse_rate(prof, 0, 3000, pres=False)
     lr75 = lapse_rate(prof, 700, 500, pres=True)
 
-    if effective == False:
-        p3km = interp.pres(prof, interp.to_msl(prof, 3000))
-        sfc_pres = prof.pres[prof.sfc]
-        shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
-        sherb = ( shear / 26. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
+    p3km = interp.pres(prof, interp.to_msl(prof, 3000))
+    sfc_pres = prof.pres[prof.get_sfc()]
+    shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
+    sherbs3_v1 = ( shear / 26. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
+    
+    return sherbs3_v1
+
+def sherbs3_v2(prof, **kwargs):
+    '''
+        Severe Hazards In Environments with Reduced Buoyancy (SHERB) Parameter, 0-3km AGL shear (SHERBS3), version 2 (*)
+
+        A composite parameter designed to assist forecasters in the High-Shear
+        Low CAPE (HSLC) environment.  This allows better discrimination 
+        between significant severe and non-severe convection in HSLC enviroments.
+
+        It can detect significant tornadoes and significant winds.  Values above
+        1 are more likely associated with significant severe.
+
+        See Sherburn et. al. 2014, WAF v.29 pgs. 854-877 for more information.
+
+        There are two versions: Version 1 is the original computation, which uses
+        the 700-500 mb lapse rate as part of its computation.  Sherburn et. al.
+        2016, WAF v.31 pgs. 1899-1927 created a new version (Version 2) that
+        replaces the 700-500 mb lapse rate with the 3-5 km AGL lapse rate, and
+        recommends using this instead.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        sherbs3_v2 : an integer for the SHERB parameter
+        '''
+
+    lr03 = lapse_rate(prof, 0, 3000, pres=False)
+    lr35k = lapse_rate(prof, 3000, 5000, pres=False)
+
+    p3km = interp.pres(prof, interp.to_msl(prof, 3000))
+    sfc_pres = prof.pres[prof.get_sfc()]
+    shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)))
+    sherbs3_v2 = ( shear / 26. ) * ( lr03 / 5.2 ) * ( lr35k / 5.6 )
+    
+    return sherbs3_v2
+
+def sherbe_v1(prof, **kwargs):
+    '''
+        Severe Hazards In Environments with Reduced Buoyancy (SHERB) Parameter, Effective shear (SHERBE), version 1 (*)
+
+        A composite parameter designed to assist forecasters in the High-Shear
+        Low CAPE (HSLC) environment.  This allows better discrimination 
+        between significant severe and non-severe convection in HSLC enviroments.
+
+        It can detect significant tornadoes and significant winds.  Values above
+        1 are more likely associated with significant severe.
+
+        See Sherburn et. al. 2014, WAF v.29 pgs. 854-877 for more information.
+
+        There are two versions: Version 1 is the original computation, which uses
+        the 700-500 mb lapse rate as part of its computation.  Sherburn et. al.
+        2016, WAF v.31 pgs. 1899-1927 created a new version (Version 2) that
+        replaces the 700-500 mb lapse rate with the 3-5 km AGL lapse rate, and
+        recommends using this instead.
+
+        REQUIRES: The effective inflow layer be defined
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        sherbe_v1 : an integer for the SHERB parameter
+        '''
+    
+    lr03 = lapse_rate(prof, 0, 3000, pres=False)
+    lr75 = lapse_rate(prof, 700, 500, pres=True)
+
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
+    
+    # Calculate the effective inflow layer
+    ebottom, etop = effective_inflow_layer( prof, mupcl=mupcl )
+    
+    if ebottom is ma.masked or etop is ma.masked:
+        # If the inflow layer doesn't exist, return missing
+        return prof.missing
     else:
-        if hasattr(prof, 'ebwd'):
-            # If the Profile object has the attribute "ebwd"
-            shear = utils.KTS2MS(utils.mag( prof.ebwd[0], prof.ebwd[1] ))
+        # Calculate the Effective Bulk Wind Difference
+        ebotm = interp.to_agl(prof, interp.hght(prof, ebottom))
+        depth = ( mupcl.elhght - ebotm ) / 2
+        elh = interp.pres(prof, interp.to_msl(prof, ebotm + depth))
+        ebwd = winds.wind_shear(prof, pbot=ebottom, ptop=elh)
+        shear = utils.KTS2MS(utils.mag( ebwd[0], ebwd[1] ))
+    
+        sherbe_v1 = ( shear / 27. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
+    
+        return sherbe_v1
 
-        elif ((not ebottom) or (not etop)) or \
-             ((not hasattr(prof, 'ebottom') or not hasattr(prof, 'etop'))):
-            # if the effective inflow layer hasn't been specified via the function arguments
-            # or doesn't exist in the Profile object we need to calculate it, but we need mupcl
-            if ebottom is None or etop is None:
-                # only calculate ebottom and etop if they're not supplied by the kwargs
-                if not hasattr(prof, 'mupcl') or not kwargs.get('mupcl', None):
-                    # If the mupcl attribute doesn't exist in the Profile
-                    # or the mupcl hasn't been passed as an argument
-                    # compute the mupcl
-                    mulplvals = DefineParcel(prof, flag=3, pres=300)
-                    mupcl = cape(prof, lplvals=mulplvals)
-                else:
-                    mupcl = prof.mupcl
+def sherbe_v2(prof, **kwargs):
+    '''
+        Severe Hazards In Environments with Reduced Buoyancy (SHERB) Parameter, Effective shear (SHERBE), version 2 (*)
+
+        A composite parameter designed to assist forecasters in the High-Shear
+        Low CAPE (HSLC) environment.  This allows better discrimination 
+        between significant severe and non-severe convection in HSLC enviroments.
+
+        It can detect significant tornadoes and significant winds.  Values above
+        1 are more likely associated with significant severe.
+
+        See Sherburn et. al. 2014, WAF v.29 pgs. 854-877 for more information.
+
+        There are two versions: Version 1 is the original computation, which uses
+        the 700-500 mb lapse rate as part of its computation.  Sherburn et. al.
+        2016, WAF v.31 pgs. 1899-1927 created a new version (Version 2) that
+        replaces the 700-500 mb lapse rate with the 3-5 km AGL lapse rate, and
+        recommends using this instead.
+
+        REQUIRES: The effective inflow layer be defined
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        sherbe_v2 : an integer for the SHERB parameter
+        '''
+    
+    lr03 = lapse_rate(prof, 0, 3000, pres=False)
+    lr35k = lapse_rate(prof, 3000, 5000, pres=False)
+
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
            
-                # Calculate the effective inflow layer
-                ebottom, etop = effective_inflow_layer( prof, mupcl=mupcl )
+    # Calculate the effective inflow layer
+    ebottom, etop = effective_inflow_layer( prof, mupcl=mupcl )
             
-            if ebottom is np.masked or etop is np.masked:
-                # If the inflow layer doesn't exist, return missing
-                return prof.missing
-            else:
-                # Calculate the Effective Bulk Wind Difference
-                ebotm = interp.to_agl(prof, interp.hght(prof, ebottom))
-                depth = ( mupcl.elhght - ebotm ) / 2
-                elh = interp.pres(prof, interp.to_msl(prof, ebotm + depth))
-                ebwd = winds.wind_shear(prof, pbot=ebottom, ptop=elh)
-        else:
-            # If there's no way to compute the effective SHERB
-            # because there's no information about how to get the
-            # inflow layer, return missing.
-            return prof.missing
-        
-        shear = utils.KTS2MS(utils.mag( prof.ebwd[0], prof.ebwd[1] ))
-        sherb = ( shear / 27. ) * ( lr03 / 5.2 ) * ( lr75 / 5.6 )
-
-    return sherb
+    if ebottom is ma.masked or etop is ma.masked:
+        # If the inflow layer doesn't exist, return missing
+        return prof.missing
+    else:
+        # Calculate the Effective Bulk Wind Difference
+        ebotm = interp.to_agl(prof, interp.hght(prof, ebottom))
+        depth = ( mupcl.elhght - ebotm ) / 2
+        elh = interp.pres(prof, interp.to_msl(prof, ebotm + depth))
+        ebwd = winds.wind_shear(prof, pbot=ebottom, ptop=elh)
+        shear = utils.KTS2MS(utils.mag( ebwd[0], ebwd[1] ))
+            
+        sherbe_v2 = ( shear / 27. ) * ( lr03 / 5.2 ) * ( lr35k / 5.6 )
+    
+        return sherbe_v2
 
 def mmp(prof, **kwargs):
 
@@ -3381,8 +3510,8 @@ def spot(prof):
     dwpc_sfc = prof.dwpc[prof.sfc]
     sfc_pres = prof.pres[prof.sfc]
     sfc_hght = prof.hght[prof.sfc]
-    wdirsfc = prof.wdir[prof.sfc]
-    wspdsfc = prof.wspd[prof.sfc]
+    wdir_sfc = prof.wdir[prof.sfc]
+    wspd_sfc = prof.wspd[prof.sfc]
 
     # Translate temperatures from Celsius to Fahrenheit
     tmpf = thermo.ctof(tmpc_sfc)
@@ -3405,39 +3534,39 @@ def spot(prof):
         asf = 100 * ( 30 - asi )
     
     # Wind vector factor
-    if 0 <= wdirsfc and wdirsfc < 40:
+    if 0 <= wdir_sfc and wdir_sfc < 40:
         if dwpf < 55:
-            wvf = -2 * wspdsfc
+            wvf = -2 * wspd_sfc
         else:
-            wvf = -1 * wspdsfc
-    elif 40 <= wdirsfc and wdirsfc < 70:
+            wvf = -1 * wspd_sfc
+    elif 40 <= wdir_sfc and wdir_sfc < 70:
         wvf = 0
-    elif 70 <= wdirsfc and wdirsfc < 130:
+    elif 70 <= wdir_sfc and wdir_sfc < 130:
         if dwpf < 55:
-            wvf = wspdsfc / 2
+            wvf = wspd_sfc / 2
         else:
-            wvf = wspdsfc
-    elif 130 <= wdirsfc and wdirsfc <= 210:
+            wvf = wspd_sfc
+    elif 130 <= wdir_sfc and wdir_sfc <= 210:
         if dwpf < 55:
-            wvf = wspdsfc
+            wvf = wspd_sfc
         else:
-            wvf = 2 * wspdsfc
-    elif 210 < wdirsfc and wdirsfc <= 230:
+            wvf = 2 * wspd_sfc
+    elif 210 < wdir_sfc and wdir_sfc <= 230:
         if dwpf < 55:
             wvf = 0
         elif 55 <= dwpf and dwpf <= 60:
-            wvf = wspdsfc / 2
+            wvf = wspd_sfc / 2
         else:
-            wvf = wspdsfc
-    elif 230 < wdirsfc and wdirsfc <= 250:
+            wvf = wspd_sfc
+    elif 230 < wdir_sfc and wdir_sfc <= 250:
         if dwpf < 55:
-            wvf = -2 * wspdsfc
+            wvf = -2 * wspd_sfc
         elif 55 <= dwpf and dwpf <= 60:
-            wvf = -1 * wspdsfc
+            wvf = -1 * wspd_sfc
         else:
-            wvf = wspdsfc
+            wvf = wspd_sfc
     else:
-        wvf = -2 * wspdsfc
+        wvf = -2 * wspd_sfc
     
     spot = taf + tdf + asf + wvf
 
@@ -3481,10 +3610,10 @@ def wbz(prof):
     ind1 = ma.where(wetbulb >= 0)[0]
     ind2 = ma.where(wetbulb <= 0)[0]
     if len(ind1) == 0 or len(ind2) == 0:
-        wbp = ma.masked
+        wbzp = ma.masked
     inds = np.intersect1d(ind1, ind2)
     if len(inds) > 0:
-        wbp = prof.pres[inds][0]
+        wbzp = prof.pres[inds][0]
     diff1 = ind1[1:] - ind1[:-1]
     ind = np.where(diff1 > 1)[0] + 1
     try:
@@ -3873,7 +4002,7 @@ def vgp(prof, pcl, **kwargs):
 
     return vgp
 
-def aded1(prof):
+def aded_v1(prof):
     '''
         Adedokun Index, version 1 (*)
 
@@ -3896,18 +4025,18 @@ def aded1(prof):
 
         Returns
         -------
-        aded1 : number
+        aded_v1 : number
             Adedokun Index, version 1 (number)
     '''
 
     pclm500 = thermo.thetaws(500, interp.temp(prof, 500))
     thtw850 = thermo.thetaw(850, interp.temp(prof, 850), interp.dwpt(prof, 850))
 
-    aded1 = thtw850 - pclm500
+    aded_v1 = thtw850 - pclm500
 
-    return aded1
+    return aded_v1
 
-def aded2(prof):
+def aded_v2(prof):
     '''
         Adedokun Index, version 2 (*)
 
@@ -3930,16 +4059,16 @@ def aded2(prof):
 
         Returns
         -------
-        aded1 : number
+        aded_v2 : number
             Adedokun Index, version 2 (number)
     '''
 
     pclm500 = thermo.thetaws(500, interp.temp(prof, 500))
     thtw_sfc = thermo.thetaw(prof.pres[prof.sfc], prof.tmpc[prof.sfc], prof.dwpc[prof.sfc])
 
-    aded2 = thtw_sfc - pclm500
+    aded_v2 = thtw_sfc - pclm500
 
-    return aded2
+    return aded_v2
 
 def ei(prof):
     '''
@@ -4212,7 +4341,7 @@ def snow(prof):
 
     return snow
 
-def windex1(prof, **kwargs):
+def windex_v1(prof, **kwargs):
     '''
         Wind Index, version 1 (*)
 
@@ -4229,8 +4358,8 @@ def windex1(prof, **kwargs):
 
         Returns
         -------
-        windex1 : knots
-            WINDEX version 1 (knots)
+        windex_v1 : knots
+            WINDEX, version 1 (knots)
     '''
 
     frz_lvl = kwargs.get('frz_lvl', None)
@@ -4253,13 +4382,13 @@ def windex1(prof, **kwargs):
     else:
         rq = mxr01 / 12
 
-    windex1 = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
+    windex_v1 = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
 
-    return windex1
+    return windex_v1
 
-def windex2(prof, **kwargs):
+def windex_v2(prof, **kwargs):
     '''
-        Wind Index version 1 (*)
+        Wind Index, version 2 (*)
 
         This index, a measure of microburst potential and downdraft instability, estimates maximum
         convective wind gust speeds.  Created by Donald McCann in 1994, the index is displayed in knots.
@@ -4274,8 +4403,8 @@ def windex2(prof, **kwargs):
 
         Returns
         -------
-        windex2 : knots
-            WINDEX version 2 (knots)
+        windex_v2 : knots
+            WINDEX, version 2 (knots)
     '''
 
     frz_lvl = kwargs.get('frz_lvl', None)
@@ -4302,13 +4431,13 @@ def windex2(prof, **kwargs):
     else:
         rq = mxr01 / 12
 
-    windex2 = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
+    windex_v2 = 5 * ( ( hm_km * rq * ((lr_frz ** 2 ) - 30 + mxr01 - ( 2 * mxr_frz )) ) ** 0.5 )
 
-    return windex2
+    return windex_v2
 
-def gustex1(prof):
+def gustex_v1(prof):
     '''
-        Gust Index version 1 (*)
+        Gust Index, version 1 (*)
 
         Formulation taken from Greer 2001, WAF v.16 pg. 266.
 
@@ -4328,23 +4457,23 @@ def gustex1(prof):
 
         Returns
         -------
-        gustex1 : knots
-            GUSTEX version 1 (knots)
+        gustex_v1 : knots
+            GUSTEX, version 1 (knots)
     '''
 
-    windx1 = getattr(prof, 'windex1', windex1(prof))
+    windex1 = getattr(prof, 'windex_v1', windex_v1(prof))
     mag500 = interp.vec(prof, 500)[1]
 
     # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
     const = 0.6
 
-    gustex1 = ( const * windx1 ) + ( mag500 / 2 )
+    gustex_v1 = ( const * windex1 ) + ( mag500 / 2 )
 
-    return gustex1
+    return gustex_v1
 
-def gustex2(prof):
+def gustex_v2(prof):
     '''
-        Gust Index version 2 (*)
+        Gust Index, version 2 (*)
 
         Formulation taken from Greer 2001, WAF v.16 pg. 266.
 
@@ -4364,23 +4493,23 @@ def gustex2(prof):
 
         Returns
         -------
-        gustex2 : knots
-            GUSTEX version 2 (knots)
+        gustex_v2 : knots
+            GUSTEX, version 2 (knots)
     '''
 
-    windx2 = getattr(prof, 'windex2', windex2(prof))
+    windex2 = getattr(prof, 'windex_v2', windex_v2(prof))
     mag500 = interp.vec(prof, 500)[1]
 
     # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
     const = 0.6
 
-    gustex2 = ( const * windx2 ) + ( mag500 / 2 )
+    gustex_v2 = ( const * windex2 ) + ( mag500 / 2 )
 
-    return gustex2
+    return gustex_v2
 
-def gustex3(prof):
+def gustex_v3(prof):
     '''
-        Gust Index version 3 (*)
+        Gust Index, version 3 (*)
 
         Formulation taken from Greer 2001, WAF v.16 pg. 266.
 
@@ -4400,11 +4529,11 @@ def gustex3(prof):
 
         Returns
         -------
-        gustex3 : knots
-            GUSTEX version 3 (knots)
+        gustex_v3 : knots
+            GUSTEX, version 3 (knots)
     '''
 
-    windx1 = getattr(prof, 'windex1', windex1(prof))
+    windex1 = getattr(prof, 'windex_v1', windex_v1(prof))
     pres1k = interp.pres(prof, interp.to_msl(prof, 1000))
     pres4k = interp.pres(prof, interp.to_msl(prof, 4000))
 
@@ -4413,13 +4542,13 @@ def gustex3(prof):
     # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
     const = 0.6
 
-    gustex3 = ( const * windx1 ) + mn_wd_1k_4k
+    gustex_v3 = ( const * windex1 ) + ( mn_wd_1k_4k / 2 )
 
-    return gustex3
+    return gustex_v3
 
-def gustex4(prof):
+def gustex_v4(prof):
     '''
-        Gust Index version 4 (*)
+        Gust Index, version 4 (*)
 
         Formulation taken from Greer 2001, WAF v.16 pg. 266.
 
@@ -4439,11 +4568,11 @@ def gustex4(prof):
 
         Returns
         -------
-        gustex4 : knots
-            GUSTEX version 4 (knots)
+        gustex_v4 : knots
+            GUSTEX, version 4 (knots)
     '''
 
-    windx2 = getattr(prof, 'windex2', windex2(prof))
+    windex2 = getattr(prof, 'windex_v2', windex_v2(prof))
     pres1k = interp.pres(prof, interp.to_msl(prof, 1000))
     pres4k = interp.pres(prof, interp.to_msl(prof, 4000))
 
@@ -4452,9 +4581,9 @@ def gustex4(prof):
     # The original paper derived a value of 0.6 for the constant, so that's what will be used here.
     const = 0.6
 
-    gustex4 = ( const * windx2 ) + mn_wd_1k_4k
+    gustex_v4 = ( const * windex2 ) + ( mn_wd_1k_4k / 2 )
 
-    return gustex4
+    return gustex_v4
 
 def wmsi(prof, **kwargs):
     '''
@@ -4490,7 +4619,7 @@ def wmsi(prof, **kwargs):
 
     return wmsi
 
-def dmpi1(prof):
+def dmpi_v1(prof):
     '''
         Dry Microburst Potential Index, version 1 (*)
 
@@ -4510,7 +4639,7 @@ def dmpi1(prof):
 
         Returns
         -------
-        dmpi1 : number
+        dmpi_v1 : number
             Dry Microburst Potential Index, version 1 (number)
     '''
 
@@ -4518,11 +4647,11 @@ def dmpi1(prof):
     tdd700 = interp.tdd(prof, 700)
     lr75 = lapse_rate(prof, 700, 500, pres=True)
 
-    dmpi1 = lr75 + tdd700 - tdd500
+    dmpi_v1 = lr75 + tdd700 - tdd500
 
-    return dmpi1
+    return dmpi_v1
 
-def dmpi2(prof):
+def dmpi_v2(prof):
     '''
         Dry Microburst Potential Index, version 2 (*)
 
@@ -4542,7 +4671,7 @@ def dmpi2(prof):
 
         Returns
         -------
-        dmpi2 : number
+        dmpi_v2 : number
             Dry Microburst Potential Index, version 2 (number)
     '''
 
@@ -4554,9 +4683,9 @@ def dmpi2(prof):
     tdd13k = interp.tdd(prof, pres13k)
     lr_5k_13k = lapse_rate(prof, lvl5k, lvl13k, pres=False)
 
-    dmpi2 = lr_5k_13k + tdd5k - tdd13k
+    dmpi_v2 = lr_5k_13k + tdd5k - tdd13k
 
-    return dmpi2
+    return dmpi_v2
 
 def hmi(prof):
     '''
@@ -4735,9 +4864,15 @@ def fmi(prof):
     '''
         Fawbush-Miller Index (*)
 
-        This index is roughly similar to the Lifted Index; however, instead of lifting a parcel to 500 mb and
-        comparing it to the environmental ambient temperature, it instead compares the average theta-w of the
-        lowest 100 mb layer and comparing it with the environmental theta-ws at 500 mb.
+        This index is roughly similar to the Lifted Index; however, it uses the mean wetbulb
+        temperature in the moist layer near the surface, which is defined as the lowest layer
+        in which the relative humidity is at or above 65 percent.  As such, the top of this
+        layer is defined as the height at which the relative humidity decreases to 65 percent.
+        If the layer top is above 150 mb above the surface, then the thickness of the moist
+        layer is arbitrarly set to 150 mb.
+
+        If the air in the first 150 mb is dryer than 65 percent relative humidity, then the
+        index is not computed.
 
         Negative values indicate increasing chances for convective and even severe weather.
 
@@ -4753,18 +4888,75 @@ def fmi(prof):
             Fawbush-Miller Index (number)
     '''
 
-    sfc_pres = prof.pres[prof.sfc]
-    pres_top = sfc_pres - 100
-    
-    ml_thtw = mean_thetaw(prof, pbot=sfc_pres, ptop=pres_top)
-    thtws500 = thermo.thetaws(500, interp.vtmp(prof, 500))
-    lift_ml_thtw = thermo.wetlift(1000, ml_thtw, 500)
-    vt_pcl500 = thermo.virtemp(500, lift_ml_thtw, lift_ml_thtw)
-    vt_thtws = thermo.thetaws(500, vt_pcl500)
-    
-    fmi = thtws500 - vt_thtws
+    wetbulb = getattr(prof, 'wetbulb', prof.get_wetbulb_profile())
+    relh = thermo.relh(prof.pres, interp.temp(prof, prof.pres), interp.dwpt(prof, prof.pres))
 
-    return fmi
+    ind1 = ma.where(relh >= 65)[0]
+    ind2 = ma.where(relh <= 65)[0]
+    if len(ind1) == 0 or len(ind2) == 0:
+        relhp = ma.masked
+    inds = np.intersect1d(ind1, ind2)
+    if len(inds) > 0:
+        relhp = prof.pres[inds][0]
+    diff1 = ind1[1:] - ind1[:-1]
+    diff2 = ind2[1:] - ind2[:-1]
+    inda = np.where(diff1 > 1)[0] + 1
+    indb = np.where(diff2 > 1)[0] + inda +1
+    ind = ma.append(inda, indb)
+    
+    rhlr = ( ( relh[ind+1] - relh[ind] ) / ( prof.hght[ind+1] - prof.hght[ind] ) ) * -100
+
+    sfc_pres = prof.pres[prof.sfc]
+    relhp0 = np.power(10, np.interp(65, [relh[ind+1][0], relh[ind][0]],
+            [prof.logp[ind+1][0], prof.logp[ind][0]]))
+    relhp1 = np.power(10, np.interp(65, [relh[ind+1][1], relh[ind][1]],
+            [prof.logp[ind+1][1], prof.logp[ind][1]]))
+
+    pr_lv0 = sfc_pres - relhp0
+    pr_lv1 = sfc_pres - relhp1
+
+    if pr_lv0 <= 150:
+        if rhlr[0] > 0:
+            relhp = relhp0
+        else:
+            if pr_lv1 <= 150:
+                relhp = relhp1
+            else:
+                relhp = sfc_pres - 150
+    else:
+        if rhlr[0] > 0:
+            relhp = sfc_pres - 150
+        else:
+            relhp = ma.masked
+    
+    if not utils.QC(relhp):
+        return ma.masked
+    else:
+        ml_wtb = mean_wetbulb(prof, pbot=sfc_pres, ptop=relhp)
+        ind1 = ma.where(wetbulb >= ml_wtb)[0]
+        ind2 = ma.where(wetbulb <= ml_wtb)[0]
+        if len(ind1) == 0 or len(ind2) == 0:
+            wbmp = ma.masked
+        inds = np.intersect1d(ind1, ind2)
+        if len(inds) > 0:
+            wbmp = prof.pres[inds][0]
+        diff1 = ind1[1:] - ind1[:-1]
+        ind = np.where(diff1 > 1)[0] + 1
+        try:
+            ind = ind.min()
+        except:
+            ind = ind1[-1]
+        
+        wbmp = np.power(10, np.interp(ml_wtb, [wetbulb[ind+1], wetbulb[ind]],
+                [prof.logp[ind+1], prof.logp[ind]]))
+    
+        vt500 = interp.vtmp(prof, 500)
+        lift_ml_wtb = thermo.wetlift(wbmp, ml_wtb, 500)
+        vt_pcl500 = thermo.virtemp(500, lift_ml_wtb, lift_ml_wtb)
+
+        fmi = vt500 - vt_pcl500
+
+        return fmi
 
 def csv(prof):
     '''
@@ -4835,7 +5027,7 @@ def z_index(prof):
 
     return z_index
 
-def k_high1(prof):
+def k_high_v1(prof):
     '''
         K-Index, high altitude version 1 (*)
 
@@ -4852,7 +5044,7 @@ def k_high1(prof):
 
         Returns
         -------
-        k_high1 : number
+        k_high_v1 : number
             K-Index, high altitude version 1
     '''
 
@@ -4861,11 +5053,11 @@ def k_high1(prof):
     dpt850 = interp.dwpt(prof, 850)
     tdd500 = interp.tdd(prof, 500)
 
-    k_high1 = ( tmp700 - tmp300 ) + dpt850 - tdd500
+    k_high_v1 = ( tmp700 - tmp300 ) + dpt850 - tdd500
 
-    return k_high1
+    return k_high_v1
 
-def k_high2(prof):
+def k_high_v2(prof):
     '''
         K-Index, high altitude version 2 (*)
 
@@ -4882,16 +5074,16 @@ def k_high2(prof):
 
         Returns
         -------
-        k_high2 : number
+        k_high_v2 : number
             K-Index, high altitude version 2
     '''
 
     dpt850 = interp.dwpt(prof, 850)
     tdd500 = interp.tdd(prof, 500)
 
-    k_high2 = dpt850 - tdd500
+    k_high_v2 = dpt850 - tdd500
 
-    return k_high2
+    return k_high_v2
 
 def swiss00(prof):
     '''
@@ -4987,7 +5179,7 @@ def fin(prof):
 
     return fin
 
-def yon1(prof):
+def yon_v1(prof):
     '''
         Yonetani Index, version 1 (*)
 
@@ -5003,7 +5195,7 @@ def yon1(prof):
 
         Returns
         -------
-        yon1 : number
+        yon_v1 : number
             Yonetani Index, version 1 (number)
     '''
 
@@ -5029,11 +5221,11 @@ def yon1(prof):
     else:
         final_term = 16.5
     
-    yon1 = ( 0.966 * lr98 ) + ( 2.41 * ( lr85 - malr850 ) ) + ( 9.66 * rh98 ) - final_term
+    yon_v1 = ( 0.966 * lr98 ) + ( 2.41 * ( lr85 - malr850 ) ) + ( 9.66 * rh98 ) - final_term
 
-    return yon1
+    return yon_v1
 
-def yon2(prof):
+def yon_v2(prof):
     '''
         Yonetani Index, version 2 (*)
 
@@ -5049,7 +5241,7 @@ def yon2(prof):
 
         Returns
         -------
-        yon2 : number
+        yon_v2 : number
             Yonetani Index, version 2 (number)
     '''
 
@@ -5075,9 +5267,9 @@ def yon2(prof):
     else:
         final_term = 14.5
     
-    yon2 = ( 0.964 * lr98 ) + ( 2.46 * ( lr85 - malr850 ) ) + ( 9.64 * rh98 ) - final_term
+    yon_v2 = ( 0.964 * lr98 ) + ( 2.46 * ( lr85 - malr850 ) ) + ( 9.64 * rh98 ) - final_term
 
-    return yon2
+    return yon_v2
 
 def fsi(prof):
     '''
@@ -5368,7 +5560,7 @@ def lsi(prof):
 
     return lsi
 
-def mcsi1(prof, lat=35):
+def mcsi_v1(prof, lat=35):
     '''
         MCS Index, version 1 (*)
 
@@ -5394,7 +5586,7 @@ def mcsi1(prof, lat=35):
 
         Returns
         -------
-        mcsi1 : number
+        mcsi_v1 : number
             MCS Index, version 1 (number)
     '''
 
@@ -5423,7 +5615,7 @@ def mcsi1(prof, lat=35):
         f = 2. * omega * np.sin(np.radians(lat)) # Units: (s**-1)
     else:
         t7_adv = np.nan
-        return mcsi1
+        return mcsi_v1
     
     multiplier = (f / 9.81) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
     
@@ -5451,11 +5643,11 @@ def mcsi1(prof, lat=35):
     adv_term = ( t7_adv - 4.5e-5 ) / 7.3e-5
 
     # Calculate equation
-    mcsi1 = li_term + shr_term + adv_term
+    mcsi_v1 = li_term + shr_term + adv_term
 
-    return mcsi1
+    return mcsi_v1
 
-def mcsi2(prof, lat=35):
+def mcsi_v2(prof, lat=35):
     '''
         MCS Index, version 2 (*)
 
@@ -5481,7 +5673,7 @@ def mcsi2(prof, lat=35):
 
         Returns
         -------
-        mcsi2 : number
+        mcsi_v2 : number
             MCS Index, version 2 (number)
     '''
 
@@ -5510,7 +5702,7 @@ def mcsi2(prof, lat=35):
         f = 2. * omega * np.sin(np.radians(lat)) # Units: (s**-1)
     else:
         t7_adv = np.nan
-        return mcsi1
+        return mcsi_v2
     
     multiplier = (f / 9.81) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
     
@@ -5538,11 +5730,140 @@ def mcsi2(prof, lat=35):
     adv_term = ( t7_adv - 4.5e-5 ) / 1.6e-4
 
     # Calculate equation
-    mcsi2 = li_term + shr_term + adv_term
+    mcsi_v2 = li_term + shr_term + adv_term
 
-    return mcsi2
+    return mcsi_v2
 
-def cii1(prof):
+def mosh(prof):
+    '''
+        Modified SHERB Parameter, standard version (MOSH) (*)
+
+        Formulation taken from Sherburn et. al. 2016, WAF v.31 pg. 1918.
+
+        In their 2016 followup to their 2014 paper that produced the SHERB parameter (q.v.), Sherburn
+        et. al. noted that while said parameter offered a means of identifying high-shear low-CAPE (HSLC)
+        environments, a thorough study of the synoptic factors prevalent in such environments offered
+        several parameters that, in combination, offered improved discrimination among severe weather in
+        HSLC environments.  The Modified SHERB (MOSH) parameters were created as a result.
+
+        The standard version (simply referred to as "MOSH") makes use of the 0-3 km AGL lapse rate, the
+        0-1.5 km AGL bulk shear vector magnitude (in meters per second), and the maximum product of the
+        theta-e lapse rate and omega calculated from the 0-2 km AGL layer to the 0-6 km AGL layer at 0.5
+        km intervals.  The enhanced version (called the Modified SHERB, Effective version or "MOSHE")
+        multiplies the basic MOSH by a factor involving the effective bulk wind difference.
+
+        Since both versions of the MOSH make use of omega, which is only available on model-derived
+        soundings, these parameters cannot be used on observed soundings.
+
+        Increasing values indicate increasing likelihood for HSLC severe weather.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        mosh : number
+            Modified SHERB Parameter, standard version (number)
+    '''
+
+    lr03k = lapse_rate(prof, 0, 3000, pres=False)
+
+    pbot = prof.pres[prof.sfc]
+    ptop = interp.pres(prof, interp.to_msl(prof, 1500))
+    shr015 = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=pbot, ptop=ptop)))
+
+    hghts = np.arange(2000, 6500, 500)
+    prs = interp.pres(prof, interp.to_msl(prof, hghts))
+    thetae_lr = ( interp.thetae(prof, prs) - prof.thetae[prof.sfc] ) / hghts * -1000
+    max_thetae_lr = ma.max(thetae_lr)
+    idx = ma.where(prof.pres > prs[-1])[0]
+    max_omega = ma.min(prof.omeg[idx])
+    maxtevv = max_thetae_lr * max_omega
+
+    if not utils.QC(prof.omeg):
+        return ma.masked
+    else:
+        if lr03k < 4:
+            lllr = 0
+        else:
+            lllr = ( ( lr03k - 4 ) ** 2 ) / 4
+    
+        if shr015 < 8:
+            shr = 0
+        else:
+            shr = ( shr015 - 8 ) / 10
+    
+        if maxtevv < -10:
+            mxtv = 0
+        else:
+            mxtv = ( maxtevv + 10 ) / 9
+    
+        mosh = lllr * shr * mxtv
+
+        return mosh
+
+def moshe(prof, **kwargs):
+    '''
+        Modified SHERB Parameter, Enhanced version (MOSHE) (*)
+
+        Formulation taken from Sherburn et. al. 2016, WAF v.31 pg. 1918.
+
+        In their 2016 followup to their 2014 paper that produced the SHERB parameter (q.v.), Sherburn
+        et. al. noted that while said parameter offered a means of identifying high-shear low-CAPE (HSLC)
+        environments, a thorough study of the synoptic factors prevalent in such environments offered
+        several parameters that, in combination, offered improved discrimination among severe weather in
+        HSLC environments.  The Modified SHERB (MOSH) parameters were created as a result.
+
+        The standard version (simply referred to as "MOSH") makes use of the 0-3 km AGL lapse rate, the
+        0-1.5 km AGL bulk shear vector magnitude (in meters per second), and the maximum product of the
+        theta-e lapse rate and omega calculated from the 0-2 km AGL layer to the 0-6 km AGL layer at 0.5
+        km intervals.  The enhanced version (called the Modified SHERB, Effective version or "MOSHE")
+        multiplies the basic MOSH by a factor involving the effective bulk wind difference.
+
+        Since both versions of the MOSH make use of omega, which is only available on model-derived
+        soundings, these parameters cannot be used on observed soundings.
+
+        Increasing values indicate increasing likelihood for HSLC severe weather.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        mosh : number
+            Modified SHERB Parameter, Enhanced version (number)
+    '''
+
+    mosh_s = getattr(prof, 'mosh', mosh(prof))
+
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
+           
+    # Calculate the effective inflow layer
+    ebottom, etop = effective_inflow_layer( prof, mupcl=mupcl )
+            
+    if ebottom is ma.masked or etop is ma.masked:
+        # If the inflow layer doesn't exist, return missing
+        return prof.missing
+    else:
+        # Calculate the Effective Bulk Wind Difference
+        ebotm = interp.to_agl(prof, interp.hght(prof, ebottom))
+        depth = ( mupcl.elhght - ebotm ) / 2
+        elh = interp.pres(prof, interp.to_msl(prof, ebotm + depth))
+        ebwd = winds.wind_shear(prof, pbot=ebottom, ptop=elh)
+        shear = utils.KTS2MS(utils.mag( ebwd[0], ebwd[1] ))
+
+        if shear < 8:
+            eshr = 0
+        else:
+            eshr = ( shear - 8 ) / 10
+    
+        moshe = mosh_s * eshr
+    
+        return moshe
+
+def cii_v1(prof):
     '''
         Convective Instability Index, version 1 (*)
 
@@ -5556,7 +5877,7 @@ def cii1(prof):
 
         Returns
         -------
-        cii1 : number
+        cii_v1 : number
             Convective Instability Index, version 1 (number)
     '''
 
@@ -5566,11 +5887,11 @@ def cii1(prof):
 
     te_s8 = ( te_sfc + te850 ) / 2
 
-    cii1 = te700 - te_s8
+    cii_v1 = te700 - te_s8
 
-    return cii1
+    return cii_v1
 
-def cii2(prof):
+def cii_v2(prof):
     '''
         Convective Instability Index, version 2 (*)
 
@@ -5584,7 +5905,7 @@ def cii2(prof):
 
         Returns
         -------
-        cii2 : number
+        cii_v2 : number
             Convective Instability Index, version 2 (number)
     '''
 
@@ -5594,11 +5915,11 @@ def cii2(prof):
     te_low100 = mean_thetae(prof, pbot=sfc_pres, ptop=top_pres)
     te65 = mean_thetae(prof, pbot=600, ptop=500)
 
-    cii2 = te_low100 - te65
+    cii_v2 = te_low100 - te65
 
-    return cii2
+    return cii_v2
 
-def cpst1(mlcape, bwd6, srh03, mlcinh):
+def cpst_v1(mlcape, bwd6, srh03, mlcinh):
     '''
         Conditional Probability of a Significant Tornado, version 1 (*)
 
@@ -5619,7 +5940,7 @@ def cpst1(mlcape, bwd6, srh03, mlcinh):
 
         Returns
         -------
-        cpst1 : percent
+        cpst_v1 : percent
             Conditional Probability of a Significant Tornado, version 1 (percent)
     '''
 
@@ -5633,11 +5954,11 @@ def cpst1(mlcape, bwd6, srh03, mlcinh):
     reg = -4.69 + ( 2.98 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 1.67  * ( srh03 / srh03_n ) ) + ( 1.82 * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
-    cpst1 = 100 / ( 1 + np.exp(-reg) )
+    cpst_v1 = 100 / ( 1 + np.exp(-reg) )
 
-    return cpst1
+    return cpst_v1
 
-def cpst2(mlcape, bwd6, bwd1, mlcinh):
+def cpst_v2(mlcape, bwd6, bwd1, mlcinh):
     '''
         Conditional Probability of a Significant Tornado, version 2 (*)
 
@@ -5658,7 +5979,7 @@ def cpst2(mlcape, bwd6, bwd1, mlcinh):
 
         Returns
         -------
-        cpst2 : percent
+        cpst_v2 : percent
             Conditional Probability of a Significant Tornado, version 2 (percent)
     '''
 
@@ -5672,11 +5993,11 @@ def cpst2(mlcape, bwd6, bwd1, mlcinh):
     reg = -5.67 + ( 3.11 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 2.23  * ( bwd1 / bwd1_n ) ) + ( 1.38  * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
-    cpst2 = 100 / ( 1 + np.exp(-reg) )
+    cpst_v2 = 100 / ( 1 + np.exp(-reg) )
 
-    return cpst2
+    return cpst_v2
 
-def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
+def cpst_v3(mlcape, bwd6, bwd1, mllcl, mlcinh):
     '''
         Conditional Probability of a Significant Tornado, version 3 (*)
 
@@ -5704,7 +6025,7 @@ def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
 
         Returns
         -------
-        cpst3 : percent
+        cpst_v3 : percent
             Conditional Probability of a Significant Tornado, version 3 (percent)
     '''
 
@@ -5719,9 +6040,9 @@ def cpst3(mlcape, bwd6, bwd1, mllcl, mlcinh):
     reg = -4.73 + ( 3.21 * ( ( ( mlcape ** 0.5 ) / mlcape_n ) * ( bwd6 / bwd6_n ) ) ) + ( 0.78 * ( ( bwd1 / bwd1_n ) / ( mllcl / mllcl_n ) ) ) + ( 1.06 * ( mlcinh / mlcinh_n ) )
 
     # P in the original paper.
-    cpst3 = 100 / ( 1 + np.exp(-reg) )
+    cpst_v3 = 100 / ( 1 + np.exp(-reg) )
 
-    return cpst3
+    return cpst_v3
 
 def tie(prof):
     '''

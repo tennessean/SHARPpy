@@ -330,9 +330,9 @@ class BasicProfile(Profile):
     
     def get_top(self):
         '''
-            Convenience function to get the index of the surface. It is
-            determined by finding the lowest level in which a temperature is
-            reported.
+            Convenience function to get the index of the top of the profile.
+            It is determined by finding the highest level in which a temperature
+            is reported.
             
             Parameters
             ----------
@@ -340,9 +340,29 @@ class BasicProfile(Profile):
             
             Returns
             -------
-            Index of the surface
+            Index of the top of the profile
             '''
         return np.where(~self.tmpc.mask)[0].max()
+    
+    def get_relh_profile(self):
+        '''
+            Function to calculate the relative humidity profile.
+            
+            Parameters
+            ----------
+            None
+            
+            Returns
+            -------
+            Array of relative humidity profile
+            '''
+        
+        relh = ma.empty(self.pres.shape[0])
+        for i in range(len(self.v)):
+            relh[i] = thermo.relh( self.pres[i], self.tmpc[i], self.dwpc[i] )
+        relh[relh == self.missing] = ma.masked
+        relh.set_fill_value(self.missing)
+        return relh
     
     def get_wetbulb_profile(self):
         '''
@@ -394,7 +414,7 @@ class BasicProfile(Profile):
             
             Returns
             -------
-            Array of theta-e profile
+            Array of theta-w profile
             '''
         thetaw = ma.empty(self.pres.shape[0])
         for i in range(len(self.v)):
@@ -434,7 +454,7 @@ class BasicProfile(Profile):
             
             Returns
             -------
-            Array of theta-ws profile
+            Array of theta-wv profile
             '''
         thetawv = ma.empty(self.pres.shape[0])
         for i in range(len(self.v)):
