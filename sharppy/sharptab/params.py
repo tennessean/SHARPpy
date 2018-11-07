@@ -28,7 +28,7 @@ __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherbs3_v1', 'sherbs3_v2', 'sherbe_v1', 'sherbe_v2', 'tei', 'tei_sfc', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
-__all__ += ['spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
+__all__ += ['alt_stg', 'spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
 __all__ += ['esi', 'vgp', 'aded_v1', 'aded_v2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
@@ -3476,6 +3476,43 @@ def thetae_diff(prof):
     else:
         return thetae_diff
 
+def alt_stg(prof, units=1):
+    '''
+        Altimeter Setting (*)
+
+        Computes the altimeter setting of the surface level.
+
+        The altimeter setting can optionally be displayed by setting the "units" value
+        to the corresponding number in the following list:
+
+        1.) Millibars (mb) / hectopascals (hPa) (default)
+        2.) Millimeters of mercury (mmHg) / torr (torr)
+        3.) Inches of mercury (inHg)
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        alt_stg : number
+            Altimeter setting (number)
+    '''
+
+    sfc_pres = prof.pres[prof.sfc]
+    sfc_hght = prof.hght[prof.sfc]
+
+    asm = sfc_pres *  (( 1 + ((( 1013.25 / sfc_pres ) ** ( 501800000. / 2637400451. )) * (( 0.0065 * sfc_hght ) / 288.15 ))) ** ( 2637400451. / 501800000. ))
+
+    if units == 1:
+        alt_stg = asm
+    elif units == 2:
+        alt_stg = utils.MB2MMHG(asm)
+    elif units == 3:
+        alt_stg = utils.MB2INHG(asm)
+    
+    return alt_stg
+
 def spot(prof):
     '''
         SPOT Index (*)
@@ -3488,12 +3525,12 @@ def spot(prof):
         Using the the SWEAT and SPOT values together tends to offer more skill
         than using either index by itself.
 
-        The SPOT Index is computed using the following numbers:
+        The SPOT Index is computed using the following variables:
 
         1.) Surface ambient temperature (in degrees Fahrenheit)
         2.) Surface dewpoint temperature (in degrees Fahrenheit)
         3.) Altimeter setting (in inches of mercury (inHg))
-        4.) Wind direction
+        4.) Wind direction (in degrees)
         5.) Wind speed (in knots)
 
         Parameters
@@ -3506,62 +3543,53 @@ def spot(prof):
             SPOT Index (number)
     '''
 
-    tmpc_sfc = prof.tmpc[prof.sfc]
-    dwpc_sfc = prof.dwpc[prof.sfc]
-    sfc_pres = prof.pres[prof.sfc]
-    sfc_hght = prof.hght[prof.sfc]
+    tmpf_sfc = thermo.ctof(prof.tmpc[prof.sfc])
+    dwpf_sfc = thermo.ctof(prof.dwpc[prof.sfc])
+    alt_stg_inHg = alt_stg(prof, units=3)
     wdir_sfc = prof.wdir[prof.sfc]
     wspd_sfc = prof.wspd[prof.sfc]
 
-    # Translate temperatures from Celsius to Fahrenheit
-    tmpf = thermo.ctof(tmpc_sfc)
-    dwpf = thermo.ctof(dwpc_sfc)
-
-    # Calculate altimeter setting
-    asm = sfc_pres * (( 1 + ((( 1013.25 / sfc_pres ) ** (501800000/2637400451) ) * (( 0.0065 * sfc_hght ) / 288.15))) ** (2637400451/501800000)) # Calculate altimeter setting in mb
-    asi = asm * 15200/514731 # Translate altimeter setting from mb to inHg
-
     # Ambient temperature factor
-    taf = tmpf - 60
+    taf = tmpf_sfc - 60
 
     # Dewpoint temperature factor
-    tdf = dwpf - 55
+    tdf = dwpf_sfc - 55
 
     # Altimeter setting factor
-    if tmpf < 50 and asi < 29.50:
-        asf = 50 * ( 30 - asi )
+    if tmpf_sfc < 50 and alt_stg_inHg < 29.50:
+        asf = 50 * ( 30 - alt_stg_inHg )
     else:
-        asf = 100 * ( 30 - asi )
+        asf = 100 * ( 30 - alt_stg_inHg )
     
     # Wind vector factor
     if 0 <= wdir_sfc and wdir_sfc < 40:
-        if dwpf < 55:
+        if dwpf_sfc < 55:
             wvf = -2 * wspd_sfc
         else:
             wvf = -1 * wspd_sfc
     elif 40 <= wdir_sfc and wdir_sfc < 70:
         wvf = 0
     elif 70 <= wdir_sfc and wdir_sfc < 130:
-        if dwpf < 55:
+        if dwpf_sfc < 55:
             wvf = wspd_sfc / 2
         else:
             wvf = wspd_sfc
     elif 130 <= wdir_sfc and wdir_sfc <= 210:
-        if dwpf < 55:
+        if dwpf_sfc < 55:
             wvf = wspd_sfc
         else:
             wvf = 2 * wspd_sfc
     elif 210 < wdir_sfc and wdir_sfc <= 230:
-        if dwpf < 55:
+        if dwpf_sfc < 55:
             wvf = 0
-        elif 55 <= dwpf and dwpf <= 60:
+        elif 55 <= dwpf_sfc and dwpf_sfc <= 60:
             wvf = wspd_sfc / 2
         else:
             wvf = wspd_sfc
     elif 230 < wdir_sfc and wdir_sfc <= 250:
-        if dwpf < 55:
+        if dwpf_sfc < 55:
             wvf = -2 * wspd_sfc
-        elif 55 <= dwpf and dwpf <= 60:
+        elif 55 <= dwpf_sfc and dwpf_sfc <= 60:
             wvf = -1 * wspd_sfc
         else:
             wvf = wspd_sfc

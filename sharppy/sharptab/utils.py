@@ -6,6 +6,7 @@ from sharppy.sharptab.constants import MISSING, TOL
 
 __all__ = ['INT2STR','FLOAT2STR','MS2KTS', 'KTS2MS', 'MS2MPH']
 __all__ += ['MPH2MS', 'MPH2KTS', 'KTS2MPH', 'M2FT', 'FT2M']
+__all__ += ['MB2INHG', 'MB2MMHG', 'INHG2MB', 'INHG2MMHG', 'MMHG2MB', 'MMHG2INHG']
 __all__ += ['vec2comp', 'comp2vec', 'mag', 'QC']
 
 def INT2STR(val):
@@ -66,7 +67,7 @@ def MS2KTS(val):
     Val converted to knots (float)
 
     '''
-    return val * 1.94384449
+    return val * ( 900. / 463. )
 
 
 def KTS2MS(val):
@@ -83,7 +84,7 @@ def KTS2MS(val):
         Val converted to meters per second (float)
 
     '''
-    return val * 0.514444
+    return val * ( 463. / 900. )
 
 
 def MS2MPH(val):
@@ -100,7 +101,7 @@ def MS2MPH(val):
     Val converted to miles per hour (float)
 
     '''
-    return val * 2.23694
+    return val * ( 3125. / 1397. )
 
 
 def MPH2MS(val):
@@ -117,7 +118,7 @@ def MPH2MS(val):
     Val converted to meters per second (float)
 
     '''
-    return val * 0.44704
+    return val * ( 1397. / 3125. )
 
 
 def MPH2KTS(val):
@@ -134,7 +135,7 @@ def MPH2KTS(val):
     Val converted to knots (float)
 
     '''
-    return val * 0.868976
+    return val * ( 52092. / 57875. )
 
 
 def KTS2MPH(val):
@@ -151,7 +152,7 @@ def KTS2MPH(val):
     Val converted to miles per hour (float)
 
     '''
-    return val * 1.15078
+    return val * ( 57875. / 50292. )
 
 
 def M2FT(val):
@@ -168,7 +169,7 @@ def M2FT(val):
         Val converted to feet (float)
 
     '''
-    return val * 3.2808399
+    return val * ( 1250. / 381. )
 
 
 def FT2M(val):
@@ -185,7 +186,109 @@ def FT2M(val):
         Val converted to meters (float)
 
     '''
-    return val * 0.3048
+    return val * ( 381. / 1250. )
+
+
+def MB2INHG(val):
+    '''
+    Convert millibars/hectopascals to inches of mercury
+
+    Parameters
+    ----------
+    val : float, numpy_array
+        Pressure ( mb / hPa )
+
+    Returns
+    -------
+        Val converted to inches of mercury (float)
+
+    '''
+    return val * ( 15200. / 514731. )
+
+
+def MB2MMHG(val):
+    '''
+    Convert millibars/hectopascals to millimeters of mercury/torr
+
+    Parameters
+    ----------
+    val : float, numpy_array
+        Pressure ( mb / hPa )
+
+    Returns
+    -------
+        Val converted to millimeters of mercury/torr (float)
+
+    '''
+    return val * ( 3040. / 4053. )
+
+
+def INHG2MB(val):
+    '''
+    Convert inches of mercury to millibars/hectopascals
+
+    Parameters
+    ----------
+    val : float, numpy_array
+        Pressure ( inHg )
+
+    Returns
+    -------
+        Val converted to millibars/hectopascals (float)
+
+    '''
+    return val * ( 514731. / 15200. )
+
+
+def INHG2MMHG(val):
+    '''
+    Convert inches of mercury to millimeters of mercury/torr
+
+    Parameters
+    ----------
+    val : float, numpy_array
+        Pressure ( inHg )
+
+    Returns
+    -------
+        Val converted to millimeters of mercury/torr (float)
+
+    '''
+    return val * ( 127. / 50. )
+
+
+def MMHG2MB(val):
+    '''
+    Convert millimeters of mercury/torr to millibars/hectopascals
+
+    Parameters
+    ----------
+    val : float, numpy_array
+        Pressure ( mmHg / torr )
+
+    Returns
+    -------
+        Val converted to millibars/hectopascals (float)
+
+    '''
+    return val * ( 4053. / 3040. )
+
+
+def MMHG2INHG(val):
+    '''
+    Convert millimeters of mercury/torr to inches of mercury
+
+    Parameters
+    ----------
+    val : float, numpy_array
+        Pressure ( mmHg / torr )
+
+    Returns
+    -------
+        Val converted to inches of mercury (float)
+
+    '''
+    return val * ( 50. / 127. )
 
 
 def _vec2comp(wdir, wspd):
