@@ -5775,7 +5775,7 @@ def mosh(prof):
 
     hghts = np.arange(2000, 6500, 500)
     prs = interp.pres(prof, interp.to_msl(prof, hghts))
-    thetae_lr = ( interp.thetae(prof, prs) - prof.thetae[prof.sfc] ) / hghts * -1000
+    thetae_lr = ( interp.thetae(prof, prs) - prof.thetae[prof.sfc] ) / hghts * 1000
     max_thetae_lr = ma.max(thetae_lr)
     idx = ma.where(prof.pres > prs[-1])[0]
     max_omega = ma.min(prof.omeg[idx])
