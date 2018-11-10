@@ -32,7 +32,7 @@ __all__ += ['alt_stg', 'spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci',
 __all__ += ['esi', 'vgp', 'aded_v1', 'aded_v2', 'ei', 'eehi', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
-__all__ += ['hi', 'ulii', 'ssi', 'fmi', 'csv', 'z_index', 'k_high_v1', 'k_high_v2', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
+__all__ += ['hi', 'ulii', 'ssi', 'fmi', 'martin', 'csv', 'z_index', 'k_high_v1', 'k_high_v2', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2']
 __all__ += ['cpst_v1', 'cpst_v2', 'cpst_v3']
@@ -1409,7 +1409,7 @@ def mean_thetawv(prof, pbot=None, ptop=None, dp=-1, exact=False):
         
         Returns
         -------
-        Mean Theta-WS
+        Mean Theta-WV
         
         '''
     if not pbot: pbot = prof.pres[prof.sfc]
@@ -3476,18 +3476,18 @@ def thetae_diff(prof):
     else:
         return thetae_diff
 
-def alt_stg(prof, units=1):
+def alt_stg(prof, units='mb'):
     '''
         Altimeter Setting (*)
 
         Computes the altimeter setting of the surface level.
 
         The altimeter setting can optionally be displayed by setting the "units" value
-        to the corresponding number in the following list:
+        to the corresponding unit shorthand in the following list:
 
-        1.) Millibars (mb) / hectopascals (hPa) (default)
-        2.) Millimeters of mercury (mmHg) / torr (torr)
-        3.) Inches of mercury (inHg)
+        1.) 'mb' or 'hPa' : Millibars (mb) / hectopascals (hPa) (default)
+        2.) 'mmHg' or 'torr' : Millimeters of mercury (mmHg) / torr (torr)
+        3.) 'inHg' : Inches of mercury (inHg)
 
         Parameters
         ----------
@@ -3504,11 +3504,11 @@ def alt_stg(prof, units=1):
 
     asm = sfc_pres *  (( 1 + ((( 1013.25 / sfc_pres ) ** ( 501800000. / 2637400451. )) * (( 0.0065 * sfc_hght ) / 288.15 ))) ** ( 2637400451. / 501800000. ))
 
-    if units == 1:
+    if units == 'mb' or units == 'hPa':
         alt_stg = asm
-    elif units == 2:
+    elif units == 'mmHg' or 'torr':
         alt_stg = utils.MB2MMHG(asm)
-    elif units == 3:
+    elif units == 'inHg':
         alt_stg = utils.MB2INHG(asm)
     
     return alt_stg
@@ -3545,7 +3545,7 @@ def spot(prof):
 
     tmpf_sfc = thermo.ctof(prof.tmpc[prof.sfc])
     dwpf_sfc = thermo.ctof(prof.dwpc[prof.sfc])
-    alt_stg_inHg = alt_stg(prof, units=3)
+    alt_stg_inHg = alt_stg(prof, units='inHg')
     wdir_sfc = prof.wdir[prof.sfc]
     wspd_sfc = prof.wspd[prof.sfc]
 
@@ -3634,25 +3634,43 @@ def wbz(prof):
             Wetbulb Zero (feet AGL)
     '''
 
-    wetbulb = getattr(prof, 'wetbulb', prof.get_wetbulb_profile())
+    dp = -1
+    sfc_pres = prof.pres[prof.sfc]
+    ps = np.arange(sfc_pres, 499, dp)
+    plog = np.log10(ps)
+    temp = interp.temp(prof, ps)
+    dwpt = interp.dwpt(prof, ps)
+    hght = interp.hght(prof, ps)
+    wetbulb = np.empty(ps.shape)
+    for i in np.arange(0, len(ps), 1):
+        wetbulb[i] = thermo.wetbulb(ps[i], temp[i], dwpt[i])
+    
     ind1 = ma.where(wetbulb >= 0)[0]
     ind2 = ma.where(wetbulb <= 0)[0]
     if len(ind1) == 0 or len(ind2) == 0:
         wbzp = ma.masked
-    inds = np.intersect1d(ind1, ind2)
-    if len(inds) > 0:
-        wbzp = prof.pres[inds][0]
-    diff1 = ind1[1:] - ind1[:-1]
-    ind = np.where(diff1 > 1)[0] + 1
-    try:
-        ind = ind.min()
-    except:
-        ind = ind1[-1]
+    else:
+        inds = np.intersect1d(ind1, ind2)
+        if len(inds) > 0:
+            wbzp = prof.pres[inds][0]
+        else:
+            diff1 = ind1[1:] - ind1[:-1]
+            ind = np.where(diff1 > 1)[0] + 1
+            try:
+                ind = ind.min()
+            except:
+                ind = ind1[-1]
+            
+            wtblr = ( ( wetbulb[ind+1] - wetbulb[ind] ) / ( hght[ind+1] - hght[ind] ) ) * -1000
+
+            if wtblr > 0:    
+                wbzp = np.power(10, np.interp(0, [wetbulb[ind+1], wetbulb[ind]],
+                        [plog[ind+1], plog[ind]]))
+            else:
+                wbzp = np.power(10, np.interp(0, [wetbulb[ind], wetbulb[ind+1]],
+                        [plog[ind], plog[ind+1]]))
     
-    wbzp = np.power(10, np.interp(0, [wetbulb[ind+1], wetbulb[ind]],
-            [prof.logp[ind+1], prof.logp[ind]]))
-    
-    wbzh = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbzp)))
+            wbzh = utils.M2FT(interp.to_agl(prof, interp.hght(prof, wbzp)))
     
     return wbzp, wbzh
 
@@ -4892,11 +4910,15 @@ def fmi(prof):
     '''
         Fawbush-Miller Index (*)
 
+        Formulation taken from
+        AWS/TR-79/006, The Use of the Skew T, Log P Diagram in Analysis and Forecasting
+        December 1979 (Revised March 1990), pg. 5-36.
+
         This index is roughly similar to the Lifted Index; however, it uses the mean wetbulb
         temperature in the moist layer near the surface, which is defined as the lowest layer
         in which the relative humidity is at or above 65 percent.  As such, the top of this
         layer is defined as the height at which the relative humidity decreases to 65 percent.
-        If the layer top is above 150 mb above the surface, then the thickness of the moist
+        If the layer top is over 150 mb above the surface, then the thickness of the moist
         layer is arbitrarly set to 150 mb.
 
         If the air in the first 150 mb is dryer than 65 percent relative humidity, then the
@@ -4916,29 +4938,60 @@ def fmi(prof):
             Fawbush-Miller Index (number)
     '''
 
-    wetbulb = getattr(prof, 'wetbulb', prof.get_wetbulb_profile())
-    relh = thermo.relh(prof.pres, interp.temp(prof, prof.pres), interp.dwpt(prof, prof.pres))
+    # Find moist layer thickness
+    dp = -1
+    sfc_pres = prof.pres[prof.sfc]
+    ps = np.arange(sfc_pres, 499, dp)
+    plog = np.log10(ps)
+    temp = interp.temp(prof, ps)
+    dwpt = interp.dwpt(prof, ps)
+    hght = interp.hght(prof, ps)
+    wetbulb = np.empty(ps.shape)
+    relh = np.empty(ps.shape)
+    for i in np.arange(0, len(ps), 1):
+        wetbulb[i] = thermo.wetbulb(ps[i], temp[i], dwpt[i])
+        relh[i] = thermo.relh(ps[i], temp[i], dwpt[i])
 
     ind1 = ma.where(relh >= 65)[0]
     ind2 = ma.where(relh <= 65)[0]
     if len(ind1) == 0 or len(ind2) == 0:
-        relhp = ma.masked
-    inds = np.intersect1d(ind1, ind2)
-    if len(inds) > 0:
-        relhp = prof.pres[inds][0]
-    diff1 = ind1[1:] - ind1[:-1]
-    diff2 = ind2[1:] - ind2[:-1]
-    inda = np.where(diff1 > 1)[0] + 1
-    indb = np.where(diff2 > 1)[0] + inda +1
-    ind = ma.append(inda, indb)
+        relhp0 = ma.masked
+        relhp1 = ma.masked
+    else:
+        inds1 = np.intersect1d(ind1, ind2)
+        if len(inds1) == 1:
+            relhp0 = prof.pres[inds1][0]
+        elif len(inds1) == 2:
+            relhp0 = prof.pres[inds1][0]
+            relhp1 = prof.pres[inds1][1]
+        else:
+            diff1 = ind1[1:] - ind1[:-1]
+            diff2 = ind2[1:] - ind2[:-1]
+            inda = np.where(diff1 > 1)[0]
+            indb = np.where(diff2 > 1)[0] + inda + 1
+            if not utils.QC(inda) or not utils.QC(indb):
+                ind_x = ind1[-1]
+            else:
+                ind_x = ma.append(inda, indb)
     
-    rhlr = ( ( relh[ind+1] - relh[ind] ) / ( prof.hght[ind+1] - prof.hght[ind] ) ) * -100
+            #Identify layers that either increase or decrease in RH, then arrange interpolation settings accordingly
+            rhlr = ( ( relh[ind_x+1] - relh[ind_x] ) / ( hght[ind_x+1] - hght[ind_x] ) ) * -100
 
-    sfc_pres = prof.pres[prof.sfc]
-    relhp0 = np.power(10, np.interp(65, [relh[ind+1][0], relh[ind][0]],
-            [prof.logp[ind+1][0], prof.logp[ind][0]]))
-    relhp1 = np.power(10, np.interp(65, [relh[ind+1][1], relh[ind][1]],
-            [prof.logp[ind+1][1], prof.logp[ind][1]]))
+            if rhlr[0] > 0:
+                relhp0 = np.power(10, np.interp(65, [relh[ind_x+1][0], relh[ind_x][0]],
+                        [plog[ind_x+1][0], plog[ind_x][0]]))
+            else:
+                relhp0 = np.power(10, np.interp(65, [relh[ind_x][0], relh[ind_x+1][0]],
+                        [plog[ind_x][0], plog[ind_x+1][0]]))
+            if not utils.QC(rhlr[1]):
+                relhp1 = ma.masked
+            else:
+                if rhlr[1] > 0:
+                    relhp1 = np.power(10, np.interp(65, [relh[ind_x+1][1], relh[ind_x][1]],
+                            [plog[ind_x+1][1], plog[ind_x][1]]))
+                else:
+                    relhp1 = np.power(10, np.interp(65, [relh[ind_x][1], relh[ind_x+1][1]],
+                            [plog[ind_x][1], plog[ind_x+1][1]]))
 
     pr_lv0 = sfc_pres - relhp0
     pr_lv1 = sfc_pres - relhp1
@@ -4957,34 +5010,137 @@ def fmi(prof):
         else:
             relhp = ma.masked
     
+    # Find mean wetbulb temperature and corresponding pressure value
     if not utils.QC(relhp):
         return ma.masked
     else:
         ml_wtb = mean_wetbulb(prof, pbot=sfc_pres, ptop=relhp)
-        ind1 = ma.where(wetbulb >= ml_wtb)[0]
-        ind2 = ma.where(wetbulb <= ml_wtb)[0]
-        if len(ind1) == 0 or len(ind2) == 0:
-            wbmp = ma.masked
-        inds = np.intersect1d(ind1, ind2)
-        if len(inds) > 0:
-            wbmp = prof.pres[inds][0]
-        diff1 = ind1[1:] - ind1[:-1]
-        ind = np.where(diff1 > 1)[0] + 1
-        try:
-            ind = ind.min()
-        except:
-            ind = ind1[-1]
+        ind3 = ma.where(wetbulb >= ml_wtb)[0]
+        ind4 = ma.where(wetbulb <= ml_wtb)[0]
+        if len(ind3) == 0 or len(ind4) == 0:
+            mwbp = ma.masked
+        else:
+            inds2 = np.intersect1d(ind3, ind4)
+            if len(inds2) > 0:
+                mwbp = prof.pres[inds2][0]
+            else:
+                diff3 = ind3[1:] - ind3[:-1]
+                ind_y = np.where(diff3 > 1)[0] + 1
+                try:
+                    ind_y = ind_y.min()
+                except:
+                    ind_y = ind3[-1]
         
-        wbmp = np.power(10, np.interp(ml_wtb, [wetbulb[ind+1], wetbulb[ind]],
-                [prof.logp[ind+1], prof.logp[ind]]))
+                # Arrange interpolation settings using wetbulb lapse rate
+                wtblr = ( ( wetbulb[ind_x+1] - wetbulb[ind_x] ) / ( hght[ind_x+1] - hght[ind_x] ) ) * -1000
+        
+                if wtblr[0] > 0:
+                    mwbp = np.power(10, np.interp(ml_wtb, [wetbulb[ind_y+1], wetbulb[ind_y]],
+                            [plog[ind_y+1], plog[ind_y]]))
+                else:
+                    mwbp = np.power(10, np.interp(ml_wtb, [wetbulb[ind_y], wetbulb[ind_y+1]],
+                            [plog[ind_y], plog[ind_y+1]]))
     
         vt500 = interp.vtmp(prof, 500)
-        lift_ml_wtb = thermo.wetlift(wbmp, ml_wtb, 500)
+        lift_ml_wtb = thermo.wetlift(mwbp, ml_wtb, 500)
         vt_pcl500 = thermo.virtemp(500, lift_ml_wtb, lift_ml_wtb)
 
         fmi = vt500 - vt_pcl500
 
         return fmi
+
+def martin(prof):
+    '''
+        Martin Index (*)
+
+        Formulation taken from
+        AWS/TR-79/006, The Use of the Skew T, Log P Diagram in Analysis and Forecasting
+        December 1979 (Revised March 1990), pg. 5-37.
+
+        Unlike most thermodynamic indices (e.g. Lifted Index), which lift a parcel upwards from a lower level
+        to a higher level, the Martin Index works in reverse: it lowers a parcel moist-adiabatically from 500
+        mb down to where the moist adiabat crosses the highest measured mixing ratio in the profile.  From
+        there, it is lowered down dry adiabatically to a particular level depending on the following circumstances:
+
+        If there is an inversion present in the profile and the base of the inversion is below 850 mb, then the
+        parcel is lowered to the level of the inversion base.  If the inversion base is at or above 850 mb, or
+        there is no inversion present in the profile, then the parcel is lowered to 850 mb.
+
+        Upon reaching the selected level, the parcel's ambient temperature is compared with the profile's
+        ambient temperature.  Negative numbers indicate instability, with increasingly negative values
+        suggesting increasing instability.
+
+        The version used here makes use of the virtual temperature correction.  This required some rewriting
+        of the equation (particularly regarding the 500 mb parcel's ambient temperature).
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        martin : number
+            Martin Index (number)
+    '''
+
+    # Find 500 mb parcel's saturation ambient temperature given its virtual temperature
+    vtp500 = interp.vtmp(prof, 500)
+    pcl_tmp500 = thermo.sat_temp(500, vtp500)
+
+    # Find maximum mixing ratio
+    mxr_prof = thermo.mixratio(prof.pres, prof.dwpc)
+    mxr_max = ma.max(mxr_prof)
+
+    # Find if an inversion exists; if so, find if bottom of lowest inversion is below 850 mb
+    inv_bot = getattr(prof, 'inversion', inversion(prof)[0][0])
+    if not utils.QC(inv_bot) or inv_bot <= 850:
+        bot_lvl = 850
+    else:
+        bot_lvl = inv_bot
+    bot_lvl_vtp = interp.vtmp(prof, bot_lvl)
+
+    # Find where 500 mb parcel's moist adiabat intersects the maximum mixing ratio;
+    # if the surface moist adiabat's mixing ratio is lower than the maximum mixing
+    # ratio, use the parcel's moist adiabat temperature at the base level
+    sfc_pres = prof.pres[prof.sfc]
+    dp = -1
+    p_wtb = np.arange(sfc_pres, 500+dp, dp)
+    plog = np.log10(p_wtb)
+    pcl_wtb = np.empty(p_wtb.shape)
+    pcl_mxr = np.empty(p_wtb.shape)
+    for i in np.arange(0, len(p_wtb), 1):
+        pcl_wtb[i] = thermo.wetlift(500, pcl_tmp500, p_wtb[i])
+        pcl_mxr[i] = thermo.mixratio(p_wtb[i], pcl_wtb[i])
+    
+    ind0 = ma.where(p_wtb == bot_lvl)[0]
+    ind1 = ma.where(pcl_mxr >= mxr_max)[0]
+    ind2 = ma.where(pcl_mxr <= mxr_max)[0]
+    if len(ind1) == 0:
+        pcl_bot_tmp = pcl_wtb[ind0][0]
+        pcl_bot_vtp = thermo.virtemp(bot_lvl, pcl_bot_tmp, pcl_bot_tmp)
+    elif len(ind2) == 0:
+        pcl_bot_tmp = ma.masked
+    else:
+        inds = np.intersect1d(ind1, ind2)
+        if len(inds) > 1:
+            pcl_lcl_p = p_wtb[inds][0]
+        else:
+            diff1 = ind1[1:] - ind1[:-1]
+            ind = ma.where(diff1 > 1)[0] + 1
+            try:
+                ind = ind.min()
+            except:
+                ind = ind1[-1]
+            pcl_lcl_p = np.power(10, np.interp(mxr_max, [pcl_mxr[ind+1], pcl_mxr[ind]],
+                [plog[ind+1], plog[ind]]))
+            pcl_lcl_tmp = thermo.wetlift(500, pcl_tmp500, pcl_lcl_p)
+            pcl_bot_tmp = thermo.theta(pcl_lcl_p, pcl_lcl_tmp, bot_lvl)
+            pcl_bot_dpt = thermo.temp_at_mixrat(bot_lvl, mxr_max)
+            pcl_bot_vtp = thermo.virtemp(bot_lvl, pcl_bot_tmp, pcl_bot_dpt)
+
+    martin = pcl_bot_vtp - bot_lvl_vtp
+
+    return martin
 
 def csv(prof):
     '''

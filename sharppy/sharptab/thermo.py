@@ -2,13 +2,15 @@
 from __future__ import division
 import numpy as np
 import numpy.ma as ma
+import scipy as scipy
+import scipy.optimize as opt
 from sharppy.sharptab.utils import *
 from sharppy.sharptab.constants import *
 
 __all__ = ['drylift', 'thalvl', 'lcltemp', 'theta', 'wobf']
 __all__ += ['satlift', 'wetlift', 'lifted', 'vappres', 'mixratio']
 __all__ += ['temp_at_mixrat', 'wetbulb', 'thetaw', 'thetaws', 'thetae', 'thetaes']
-__all__ += ['thetad', 'thetads', 'thetav', 'virtemp', 'relh']
+__all__ += ['thetad', 'thetads', 'thetav', 'virtemp', 'sat_temp', 'relh']
 __all__ += ['ftoc', 'ctof', 'ctok', 'ktoc', 'ftok', 'ktof']
 
 
@@ -291,6 +293,30 @@ def virtemp(p, t, td):
         return t
     else:
         return vt
+
+def sat_temp(p, vt):
+    '''
+    For a given virtual temperature (C), returns the saturated
+    ambient temperature (C) of a parcel (i.e. the ambient temperature
+    at which the parcel is saturated).
+
+    Parameters
+    ----------
+    p : number
+        The pressure of the parcel (hPa)
+    vt : number
+        Virtual temperature of the parcel (C)
+
+    Returns
+    -------
+    Saturated ambient temperature (C)
+
+    '''
+
+    def sat_f(t, p, vt):
+        return virtemp(p, t, t) - vt
+    sat_temp = opt.newton(sat_f, vt, args=(p, vt), tol=1e-12, maxiter=50)
+    return sat_temp
 
 def relh(p, t, td):
     '''
