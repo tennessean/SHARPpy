@@ -3506,7 +3506,7 @@ def alt_stg(prof, units='mb'):
 
     if units == 'mb' or units == 'hPa':
         alt_stg = asm
-    elif units == 'mmHg' or 'torr':
+    elif units == 'mmHg' or units == 'torr':
         alt_stg = utils.MB2MMHG(asm)
     elif units == 'inHg':
         alt_stg = utils.MB2INHG(asm)
