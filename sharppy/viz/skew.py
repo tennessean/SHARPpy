@@ -469,7 +469,7 @@ class plotSkewT(backgroundSkewT):
 
         plot_title = loc + '   ' + datetime.strftime(date, "%Y%m%d/%H%M")
         if prof_coll.hasMeta('pbl'):
-            # Added for VSE PBL shemes
+            # Added for VSE PBL schemes
             plot_title += " "+prof_coll.getMeta('pbl')
         
         if model == "Archive":
