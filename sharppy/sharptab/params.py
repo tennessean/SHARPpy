@@ -34,7 +34,7 @@ __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
 __all__ += ['hi', 'ulii', 'ssi', 'fmi', 'martin', 'csv', 'z_index', 'k_high_v1', 'k_high_v2', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2']
+__all__ += ['mvv', 'tsi', 'jli', 'cs', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2']
 __all__ += ['cpst_v1', 'cpst_v2', 'cpst_v3']
 __all__ += ['tie']
 __all__ += ['t1_gust', 't2_gust']
@@ -789,7 +789,7 @@ def inferred_temp_adv(prof, lat=35):
         temp_adv[:] = np.nan
         return temp_adv, pressure_bounds
 
-    multiplier = (f / 9.81) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
+    multiplier = (f / G) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
 
     for i in xrange(1, len(pressures)):
         bottom_pres = pressures[i-1]
@@ -5636,6 +5636,46 @@ def jli(prof):
 
     return jli
 
+def cs(prof):
+    '''
+        CS Index (*)
+
+        Formulation taken from Huntrieser et. al. 1997, WAF v.12 pg. 119.
+
+        This index is a multiple of two parameters.  The first parameter is the CAPE produced
+        by a parcel that is lifted from the convective temperature (labeled in the source paper
+        as "CAPE_CCL").  The second parameter is the shear used in the calculation of the Bulk
+        Richardson Number (BRN) shear term (labeled in the source paper as simply "S")..
+
+        The source paper notes that values of over 2700 indicate increased likelihood of widespread
+        thunderstorms.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        cs : number
+            CS Index (number)
+    '''
+
+    cnvcpcl = getattr(prof, 'cnvcpcl', parcelx(prof, flag=7))
+    cnvc_cape = cnvcpcl.bplus
+
+    ptop = interp.pres(prof, interp.to_msl(prof, 6000.))
+    pbot = prof.pres[prof.sfc]
+    p = interp.pres(prof, interp.hght(prof, pbot)+500.)
+    mnlu, mnlv = winds.mean_wind(prof, pbot, p)
+    mnuu, mnuv = winds.mean_wind(prof, pbot, ptop)
+    dx = mnuu - mnlu
+    dy = mnuv - mnlv
+    shr = utils.KTS2MS(utils.mag(dx, dy))
+
+    cs = cnvc_cape * shr
+
+    return cs
+
 def ncape(prof, pcl):
     '''
         Normalized CAPE (*)
@@ -5786,14 +5826,21 @@ def mcsi_v1(prof, lat=35):
     # Calculate 700 mb temperature advection
     omega = (2. * np.pi) / (86164.)
     b_pr = 750 # Pressure of bottom of layer
-    m_pr = 700 # Pressure of middle of layer
     t_pr = 650 # Pressure of top of layer
-    m_tmp = thermo.ctok(interp.temp(prof, m_pr)) # Temperature of middle of layer (Kelvin)
+    b_tmp = thermo.ctok(interp.temp(prof, b_pr)) # Temperature of bottom of layer (Kelvin)
+    t_tmp = thermo.ctok(interp.temp(prof, t_pr)) # Temperature of top of layer (Kelvin)
     b_ht = interp.hght(prof, b_pr) # Height ASL of bottom of layer (meters)
     t_ht = interp.hght(prof, t_pr) # Height ASL of top of layer (meters)
     b_wdir = interp.vec(prof, b_pr)[0] # Wind direction at bottom of layer (degrees from north)
     t_wdir = interp.vec(prof, t_pr)[0] # Wind direction at top of layer (degrees from north)
-    m_wspd = utils.KTS2MS(interp.vec(prof, m_pr)[1]) # Wind speed at middle of layer (meters/second)
+
+    # Calculate the average temperature
+    avg_tmp = (t_tmp + b_tmp) / 2.
+    
+    # Calculate the mean wind between the two levels (this is assumed to be geostrophic)
+    mean_u, mean_v = winds.mean_wind(prof, pbot=b_pr, ptop=t_pr)
+    mean_wdir, mean_wspd = utils.comp2vec(mean_u, mean_v) # Wind speed is in knots here
+    mean_wspd = utils.KTS2MS(mean_wspd) # Convert this geostrophic wind speed to m/s
 
     if utils.QC(lat):
         f = 2. * omega * np.sin(np.radians(lat)) # Units: (s**-1)
@@ -5801,7 +5848,7 @@ def mcsi_v1(prof, lat=35):
         t7_adv = np.nan
         return mcsi_v1
     
-    multiplier = (f / 9.81) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
+    multiplier = (f / G) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
     
     # Calculate change in wind direction with height; this will help determine whether advection is warm or cold
     mod = 180 - b_wdir
@@ -5815,7 +5862,7 @@ def mcsi_v1(prof, lat=35):
 
     # Here we calculate t_adv (which is -V_g * del(T) or the local change in temperature term)
     # K/s  s * rad/m * deg   m^2/s^2          K        degrees / m
-    t7_adv = multiplier * np.power(m_wspd,2) * m_tmp * (d_theta / (t_ht - b_ht)) # Units: Kelvin / seconds 
+    t7_adv = multiplier * np.power(mean_wspd,2) * avg_tmp * (d_theta / (t_ht - b_ht)) # Units: Kelvin / seconds 
 
     # Calculate LI term
     li_term = -( muli + 4.4 ) / 3.3
@@ -5873,14 +5920,21 @@ def mcsi_v2(prof, lat=35):
     # Calculate 700 mb temperature advection
     omega = (2. * np.pi) / (86164.)
     b_pr = 750 # Pressure of bottom of layer
-    m_pr = 700 # Pressure of middle of layer
     t_pr = 650 # Pressure of top of layer
-    m_tmp = thermo.ctok(interp.temp(prof, m_pr)) # Temperature of middle of layer (Kelvin)
+    b_tmp = interp.temp(prof, b_pr) # Temperature of bottom of layer (Celsius)
+    t_tmp = interp.temp(prof, t_pr) # Temperature of top of layer (Celsius)
     b_ht = interp.hght(prof, b_pr) # Height ASL of bottom of layer (meters)
     t_ht = interp.hght(prof, t_pr) # Height ASL of top of layer (meters)
     b_wdir = interp.vec(prof, b_pr)[0] # Wind direction at bottom of layer (degrees from north)
     t_wdir = interp.vec(prof, t_pr)[0] # Wind direction at top of layer (degrees from north)
-    m_wspd = utils.KTS2MS(interp.vec(prof, m_pr)[1]) # Wind speed at middle of layer (meters/second)
+
+    # Calculate the average temperature
+    avg_tmp = (t_tmp + b_tmp) / 2.
+    
+    # Calculate the mean wind between the two levels (this is assumed to be geostrophic)
+    mean_u, mean_v = winds.mean_wind(prof, pbot=b_pr, ptop=t_pr)
+    mean_wdir, mean_wspd = utils.comp2vec(mean_u, mean_v) # Wind speed is in knots here
+    mean_wspd = utils.KTS2MS(mean_wspd) # Convert this geostrophic wind speed to m/s
 
     if utils.QC(lat):
         f = 2. * omega * np.sin(np.radians(lat)) # Units: (s**-1)
@@ -5888,7 +5942,7 @@ def mcsi_v2(prof, lat=35):
         t7_adv = np.nan
         return mcsi_v2
     
-    multiplier = (f / 9.81) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
+    multiplier = (f / G) * (np.pi / 180.) # Units: (s**-1 / (m/s**2)) * (radians/degrees)
     
     # Calculate change in wind direction with height; this will help determine whether advection is warm or cold
     mod = 180 - b_wdir
@@ -5902,7 +5956,7 @@ def mcsi_v2(prof, lat=35):
 
     # Here we calculate t_adv (which is -V_g * del(T) or the local change in temperature term)
     # K/s  s * rad/m * deg   m^2/s^2          K        degrees / m
-    t7_adv = multiplier * np.power(m_wspd,2) * m_tmp * (d_theta / (t_ht - b_ht)) # Units: Kelvin / seconds 
+    t7_adv = multiplier * np.power(mean_wspd,2) * avg_tmp * (d_theta / (t_ht - b_ht)) # Units: Kelvin / seconds 
 
     # Calculate LI term
     li_term = -( muli + 4.4 ) / 3.3
