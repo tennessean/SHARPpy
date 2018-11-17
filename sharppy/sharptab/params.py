@@ -29,7 +29,7 @@ __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_sev
 __all__ += ['dgz', 'ship', 'stp_cin', 'stp_fixed', 'scp', 'mmp', 'wndg', 'sherbs3_v1', 'sherbs3_v2', 'sherbe_v1', 'sherbe_v2', 'tei', 'tei_sfc', 'cape']
 __all__ += ['mburst', 'dcp', 'ehi', 'sweat', 'hgz', 'lhp']
 __all__ += ['alt_stg', 'spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci', 'pii', 'ko', 'brad', 'rack', 'jeff', 'sc_totals']
-__all__ += ['esi', 'vgp', 'aded_v1', 'aded_v2', 'ei', 'eehi', 'vtp']
+__all__ += ['esi', 'vgp', 'aded_v1', 'aded_v2', 'ei', 'eehi', 'strong_tor', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
 __all__ += ['hi', 'ulii', 'ssi', 'fmi', 'martin', 'csv', 'z_index', 'k_high_v1', 'k_high_v2', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
@@ -4240,6 +4240,37 @@ def eehi(prof, sbcape, mlcape, sblcl, mllcl, srh01, bwd6, **kwargs):
     
     return eehi
 
+def strong_tor(mlcape, bwd1, bwd6, mllcl, dcape):
+    '''
+        Strong Tornado Parameter (Strong-Tor) (*)
+
+        Formulation taken from Craven and Brooks 2004, NWD v.28 pg. 20.
+
+        This index was inspired by the original (fixed-layer) version of the Significant Tornado Parameter
+        (STP-Fixed (q.v.)), but is not to be confused with it.  It makes use of some of the same parameters
+        as STP-Fixed; however, it replaces storm-relative helicity with 0-1 km AGL bulk shear (meaning neither
+        observed nor estimated storm motion is required for calculation) and adds in downdraft CAPE (DCAPE).
+
+        The source paper notes that well over 50% of the significant tornado cases it studied occurred with
+        values over 0.25, while over 75% of the cases that didn't involve significant tornadoes occurred with
+        values under 0.25.
+
+        Parameters
+        ----------
+        prof : Profile object
+        mlcape : Mixed-layer CAPE from the parcel class (J/kg)
+        bwd1 : 0-1 km AGL bulk wind difference (m/s)
+        bwd6 : 0-6 km AGL bulk wind difference (m/s)
+        mllcl : mixed-layer lifted condensation level (m)
+        dcape : downdraft CAPE (J/kg)
+    '''
+
+    dcape_t = dcape[0]
+
+    strong_tor = ( ( mlcape * bwd1 * bwd6 ) / ( mllcl * dcape_t) )
+
+    return strong_tor
+
 def vtp(prof, mlcape, esrh, ebwd, mllcl, mlcinh, **kwargs):
     '''
         Violent Tornado Parameter (*)
@@ -5099,9 +5130,9 @@ def martin(prof):
         bot_lvl = inv_bot
     bot_lvl_vtp = interp.vtmp(prof, bot_lvl)
 
-    # Find where 500 mb parcel's moist adiabat intersects the maximum mixing ratio;
-    # if the surface moist adiabat's mixing ratio is lower than the maximum mixing
-    # ratio, use the parcel's moist adiabat temperature at the base level
+    # Find where 500 mb parcel's moist adiabat intersects the maximum mixing ratio; if parcel's
+    # moist adiabat's mixing ratio at the base level is lower than or equal to the maximum
+    # mixing ratio, use the parcel's moist adiabat temperature at the base level
     sfc_pres = prof.pres[prof.sfc]
     dp = -1
     p_wtb = np.arange(sfc_pres, 500+dp, dp)
@@ -5119,7 +5150,7 @@ def martin(prof):
         pcl_bot_tmp = pcl_wtb[ind0][0]
         pcl_bot_vtp = thermo.virtemp(bot_lvl, pcl_bot_tmp, pcl_bot_tmp)
     elif len(ind2) == 0:
-        pcl_bot_tmp = ma.masked
+        martin = ma.masked
     else:
         inds = np.intersect1d(ind1, ind2)
         if len(inds) > 1:
