@@ -34,7 +34,7 @@ __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
 __all__ += ['hi', 'ulii', 'ssi', 'fmi', 'martin', 'csv', 'z_index', 'k_high_v1', 'k_high_v2', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'cs', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2']
+__all__ += ['mvv', 'tsi', 'jli', 'cs', 'wmaxshear', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2', 'brooks_b']
 __all__ += ['cpst_v1', 'cpst_v2', 'cpst_v3']
 __all__ += ['tie']
 __all__ += ['t1_gust', 't2_gust']
@@ -4006,7 +4006,7 @@ def esi(prof, sbcape):
 
     return esi
 
-def vgp(prof, pcl, **kwargs):
+def vgp(prof, pcl):
     '''
         Vorticity Generation Potential (*)
 
@@ -4018,7 +4018,7 @@ def vgp(prof, pcl, **kwargs):
 
         VGP = sqrt(CAPE) * U03
 
-        where U03 is the mean shear between the surface and 3 km AGL.
+        Where U03 is the normalized total shear between the surface and 3 km AGL.
         
         Parameters
         ----------
@@ -4031,20 +4031,11 @@ def vgp(prof, pcl, **kwargs):
             Vorticity Generation Potential (number)
     '''
 
-    sfc3shr = kwargs.get('sfc3shr', None)
-
-    if not sfc3shr:
-        try:
-            sfc_3km_shear = prof.sfc_3km_shear
-        except:
-            sfc_pres = prof.pres[prof.sfc]
-            p3km = interp.pres(prof, interp.to_msl(prof, 3000.))
-            sfc_3km_shear = winds.wind_shear(prof, pbot=sfc_pres, ptop=p3km)
+    psfc = prof.pres[prof.sfc]
+    p3km = interp.pres(prof, interp.to_msl(prof, 3000))
+    sfc3shr = winds.norm_total_shear(prof, pbot=psfc, ptop=p3km)[-1]
     
-    shr03 = utils.KTS2MS(utils.mag(*sfc_3km_shear))
-    mag03_shr = shr03 / 3000
-
-    vgp = mag03_shr * ( pcl.bplus ** 0.5 )
+    vgp = sfc3shr * ( pcl.bplus ** 0.5 )
 
     return vgp
 
@@ -5707,6 +5698,41 @@ def cs(prof):
 
     return cs
 
+def wmaxshear(prof):
+    '''
+        WMAXSHEAR Parameter (*)
+
+        This parameter was derived in Taszarek et. al. 2017, MWR v.145 pg. 1519, as part of a study
+        on European convective weather climatology.  It multiplies the maximum vertical velocity
+        (WMAX) of a mixed-layer parcel (derived from the mixed-layer CAPE (MLCAPE)) by the 0-6 km
+        AGL bulk shear (SHEAR).  The source paper notes that, of all the parameters it tested, this
+        particular parameter best discriminated among severe and non-severe convection, as well as
+        among the various categories of severe convection.
+
+        Higher values generally indicate higher chances of severe weather, and increasing severity
+        of convective weather.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        wmaxshear : m**2 / s**2
+            WMAXSHEAR (meters**2 / second**2)
+    '''
+
+    mlpcl = getattr(prof, 'mlpcl', parcelx(prof, flag=4))
+    pres_sfc = prof.pres[prof.sfc]
+    p6k = interp.pres(prof, interp.to_msl(prof, 6000))
+
+    wmax = mvv(prof, mlpcl)
+    shear = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=pres_sfc, ptop=p6k)))
+
+    wmaxshear = wmax * shear
+
+    return wmaxshear
+
 def ncape(prof, pcl):
     '''
         Normalized CAPE (*)
@@ -6187,6 +6213,57 @@ def cii_v2(prof):
     cii_v2 = te_low100 - te65
 
     return cii_v2
+
+def brooks_b(prof):
+    '''
+        Brooks B Parameter (*)
+
+        Formulation taken from Rasmussen and Blanchard 1998, WAF v.13 pg. 1158.
+
+        This equation was originally derived in Brooks et. al. 1994, WAF v.9 pgs. 606-618, as
+        part of a study on the relationship between low-level helicity, mid-level storm-
+        relative wind flow, and low-level moisture.  The version used here was modified by
+        Rasmussen and Blanchard for their tornado climatology study.  Higher values indicate
+        a greater chance of severe weather and possibly tornadoes.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        brooks_b : number
+            Brooks B Parameter (number)
+    '''
+
+    srwind = bunkers_storm_motion(prof)
+    srh3km = winds.helicity(prof, 0, 3000, srwind[0], srwind[1])[0]
+    p1k = interp.pres(prof, interp.to_msl(prof, 1000))
+    p2k = interp.pres(prof, interp.to_msl(prof, 2000))
+    p9k = interp.pres(prof, interp.to_msl(prof, 9000))
+
+    ind1 = np.where((p2k > prof.pres) | (np.isclose(p2k, prof.pres)))[0][0]
+    ind2 = np.where((p9k < prof.pres) | (np.isclose(p9k, prof.pres)))[0][-1]
+
+    gru, grv = utils.vec2comp(prof.wdir, prof.wspd)
+    sru, srv = gru - srwind[0], grv - srwind[1]
+    srwspd = utils.comp2vec(sru, srv)[1]
+
+    if len(srwspd[ind1:ind2+1]) == 0 or ind1 == ind2:
+        minu, minv =  sru[ind1], srv[ind1]
+        return minu, minv, prof.pres[ind1]
+    
+    arr = srwspd[ind1:ind2+1]
+    inds = np.ma.argsort(arr)
+    inds = inds[~arr[inds].mask][0::]
+    minu, minv =  sru[ind1:ind2+1][inds], srv[ind1:ind2+1][inds]
+    vmin = utils.KTS2MS(utils.comp2vec(minu[0], minv[0])[1])
+
+    mn_mxr = mean_mixratio(prof, pbot=None, ptop=p1k)
+
+    brooks_b = mn_mxr + ( 11.5 * np.log10(srh3km / vmin) )
+
+    return brooks_b
 
 def cpst_v1(mlcape, bwd6, srh03, mlcinh):
     '''

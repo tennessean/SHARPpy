@@ -7,7 +7,7 @@ from sharppy.sharptab.constants import *
 import warnings
 
 __all__ = ['mean_wind', 'mean_wind_npw', 'mean_wind_old', 'mean_wind_npw_old']
-__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'norm_wind_shear', 'helicity', 'max_wind']
+__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'norm_wind_shear', 'total_shear', 'norm_total_shear', 'helicity', 'max_wind']
 __all__ += ['non_parcel_bunkers_motion', 'corfidi_mcs_motion', 'mbe_vectors']
 __all__ += ['non_parcel_bunkers_motion_experimental', 'critical_angle']
 
@@ -193,16 +193,135 @@ def norm_wind_shear(prof, pbot=850, ptop=250):
     nws : number
         Normalized wind shear (Thousandths of units per second)
     '''
-    ubot, vbot = interp.components(prof, pbot)
-    utop, vtop = interp.components(prof, ptop)
-    shu = utils.KTS2MS(utop - ubot)
-    shv = utils.KTS2MS(vtop - vbot)
-    shr = utils.mag(shu, shv)
+    shr = utils.KTS2MS(utils.mag(*wind_shear(prof, pbot=pbot, ptop=ptop)))
     hbot = interp.hght(prof, pbot)
     htop = interp.hght(prof, ptop)
     thickness = htop - hbot
     nws = shr / thickness
     return nws
+
+def total_shear(prof, pbot=850, ptop=250, dp=-1, exact=True):
+    '''
+    Calculates the total shear (also known as the hodograph length) between
+    the wind at (pbot) and (ptop).
+
+    Parameters
+    ----------
+    prof: profile object
+        Profile object
+    pbot : number (optional; default 850 hPa)
+        Pressure of the bottom level (hPa)
+    ptop : number (optional; default 250 hPa)
+        Pressure of the top level (hPa)
+    dp : negative integer (optional; default -1)
+        The pressure increment for the interpolated sounding
+    exact : bool (optional; default = True)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+
+    Returns
+    -------
+    tot_pos_shr : number
+        Total positive shear
+    tot_neg_shr : number
+        Total negative shear
+    tot_shr : number
+        Total shear (subtracting negative shear from positive shear)
+    tot_abs_shr : number
+        Total absolute shear (adding positive and negative shear together)
+    '''
+    if np.isnan(pbot) or np.isnan(ptop) or \
+        type(pbot) == type(ma.masked) or type(ptop) == type(ma.masked):
+        print np.ma.masked, np.ma.masked, np.ma.masked, np.ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        u1, v1 = interp.components(prof, pbot)
+        u2, v2 = interp.components(prof, ptop)
+        u = np.concatenate([[u1], prof.u[ind1:ind2+1].compressed(), [u2]])
+        v = np.concatenate([[v1], prof.v[ind1:ind2+1].compressed(), [v2]])
+    else:
+        ps = np.arange(pbot, ptop+dp, dp)
+        u, v = interp.components(prof, ps)
+    shu = u[1:] - u[:-1]
+    shv = v[1:] - v[:-1]
+    shr = ( ( np.power(shu, 2) + np.power(shv, 2) ) ** 0.5 )
+    wdr, wsp = utils.comp2vec(u,v)
+    t_wdr = wdr[1:]
+    mod = 180 - wdr[:-1]
+    t_wdr = t_wdr + mod
+
+    idx1 = ma.where(t_wdr < 0)[0]
+    idx2 = ma.where(t_wdr >= 360)[0]
+    t_wdr[idx1] = t_wdr[idx1] + 360
+    t_wdr[idx2] = t_wdr[idx2] - 360
+    d_wdr = t_wdr - 180
+    d_wsp = wsp[1:] - wsp[:-1]
+    idxdp = ma.where(d_wdr > 0)[0]
+    idxdn = ma.where(d_wdr < 0)[0]
+    idxsp = ma.where(np.logical_and(d_wdr == 0, d_wsp > 0) == True)[0]
+    idxsn = ma.where(np.logical_and(d_wdr == 0, d_wsp < 0) == True)[0]
+    if not utils.QC(idxdp):
+        pos_dir_shr = ma.masked
+    else:
+        pos_dir_shr = shr[idxdp].sum()
+    if not utils.QC(idxdn):
+        neg_dir_shr = ma.masked
+    else:
+        neg_dir_shr = shr[idxdn].sum()
+    if not utils.QC(idxsp):
+        pos_spd_shr = ma.masked
+    else:
+        pos_spd_shr = shr[idxsp].sum()
+    if not utils.QC(idxsn):
+        neg_spd_shr = ma.masked
+    else:
+        neg_spd_shr = shr[idxsn].sum()
+    tot_pos_shr = pos_dir_shr + pos_spd_shr
+    tot_neg_shr = neg_dir_shr + neg_spd_shr
+    tot_shr = tot_pos_shr - tot_neg_shr
+    tot_abs_shr = tot_pos_shr + tot_neg_shr
+
+    return tot_pos_shr, tot_neg_shr, tot_shr, tot_abs_shr
+
+def norm_total_shear(prof, pbot=850, ptop=250, dp=-1, exact=True):
+    '''
+    Calculates the total shear (also known as the hodograph length) between
+    the wind at (pbot) and (ptop), normalized by dividing by the thickness
+    of the layer.
+
+    Parameters
+    ----------
+    prof: profile object
+        Profile object
+    pbot : number (optional; default 850 hPa)
+        Pressure of the bottom level (hPa)
+    ptop : number (optional; default 250 hPa)
+        Pressure of the top level (hPa)
+    dp : negative integer (optional; default -1)
+        The pressure increment for the interpolated sounding
+    exact : bool (optional; default = True)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+
+    Returns
+    -------
+    norm_tot_pos_shr : number
+        Normalized total positive shear
+    norm_tot_neg_shr : number
+        Normalized total negative shear
+    norm_tot_shr : number
+        Normalized total shear (subtracting negative shear from positive shear)
+    norm_tot_abs_shr : number
+        Normalized total absolute shear (adding positive and negative shear together)
+    '''
+    shr = utils.KTS2MS(np.asarray(total_shear(prof, pbot=pbot, ptop=ptop, dp=dp, exact=exact)))
+    hbot = interp.hght(prof, pbot)
+    htop = interp.hght(prof, ptop)
+    thickness = htop - hbot
+    norm_tot_pos_shr, norm_tot_neg_shr, norm_tot_shr, norm_tot_abs_shr = shr / thickness
+
+    return norm_tot_pos_shr, norm_tot_neg_shr, norm_tot_shr, norm_tot_abs_shr
 
 def non_parcel_bunkers_motion_experimental(prof):
     '''
