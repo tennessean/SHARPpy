@@ -7,7 +7,7 @@ from sharppy.sharptab.constants import *
 import warnings
 
 __all__ = ['mean_wind', 'mean_wind_npw', 'mean_wind_old', 'mean_wind_npw_old']
-__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'norm_wind_shear', 'total_shear', 'norm_total_shear', 'helicity', 'max_wind']
+__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'norm_wind_shear', 'total_shear', 'norm_total_shear', 'hodo_curve', 'helicity', 'max_wind']
 __all__ += ['non_parcel_bunkers_motion', 'corfidi_mcs_motion', 'mbe_vectors']
 __all__ += ['non_parcel_bunkers_motion_experimental', 'critical_angle']
 
@@ -225,8 +225,8 @@ def total_shear(prof, pbot=850, ptop=250, dp=-1, exact=True):
         Total positive shear
     tot_neg_shr : number
         Total negative shear
-    tot_shr : number
-        Total shear (subtracting negative shear from positive shear)
+    tot_net_shr : number
+        Total net shear (subtracting negative shear from positive shear)
     tot_abs_shr : number
         Total absolute shear (adding positive and negative shear together)
     '''
@@ -279,10 +279,10 @@ def total_shear(prof, pbot=850, ptop=250, dp=-1, exact=True):
         neg_spd_shr = shr[idxsn].sum()
     tot_pos_shr = pos_dir_shr + pos_spd_shr
     tot_neg_shr = neg_dir_shr + neg_spd_shr
-    tot_shr = tot_pos_shr - tot_neg_shr
+    tot_net_shr = tot_pos_shr - tot_neg_shr
     tot_abs_shr = tot_pos_shr + tot_neg_shr
 
-    return tot_pos_shr, tot_neg_shr, tot_shr, tot_abs_shr
+    return tot_pos_shr, tot_neg_shr, tot_net_shr, tot_abs_shr
 
 def norm_total_shear(prof, pbot=850, ptop=250, dp=-1, exact=True):
     '''
@@ -310,8 +310,8 @@ def norm_total_shear(prof, pbot=850, ptop=250, dp=-1, exact=True):
         Normalized total positive shear
     norm_tot_neg_shr : number
         Normalized total negative shear
-    norm_tot_shr : number
-        Normalized total shear (subtracting negative shear from positive shear)
+    norm_tot_net_shr : number
+        Normalized total net shear (subtracting negative shear from positive shear)
     norm_tot_abs_shr : number
         Normalized total absolute shear (adding positive and negative shear together)
     '''
@@ -319,9 +319,44 @@ def norm_total_shear(prof, pbot=850, ptop=250, dp=-1, exact=True):
     hbot = interp.hght(prof, pbot)
     htop = interp.hght(prof, ptop)
     thickness = htop - hbot
-    norm_tot_pos_shr, norm_tot_neg_shr, norm_tot_shr, norm_tot_abs_shr = shr / thickness
+    norm_tot_pos_shr, norm_tot_neg_shr, norm_tot_net_shr, norm_tot_abs_shr = shr / thickness
 
-    return norm_tot_pos_shr, norm_tot_neg_shr, norm_tot_shr, norm_tot_abs_shr
+    return norm_tot_pos_shr, norm_tot_neg_shr, norm_tot_net_shr, norm_tot_abs_shr
+
+def hodo_curve(prof, pbot=850, ptop=250, dp=-1, exact=True):
+    '''
+    Calculates the curvature of the hodograph length over a particular layer
+    between (pbot) and (ptop), by dividing the total shear length by the
+    bulk shear.  Values of exactly 1 indicate a perfectly straight hodograph
+    length, while higher values indicate an increasingly more curved hodograph
+    length.
+
+    Parameters
+    ----------
+    prof: profile object
+        Profile object
+    pbot : number (optional; default 850 hPa)
+        Pressure of the bottom level (hPa)
+    ptop : number (optional; default 250 hPa)
+        Pressure of the top level (hPa)
+    dp : negative integer (optional; default -1)
+        The pressure increment for the interpolated sounding
+    exact : bool (optional; default = True)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+
+    Returns
+    -------
+    hodo_curve : number
+        Curvature ratio of the hodograph length
+    '''
+
+    tot_shr = total_shear(prof, pbot=pbot, ptop=ptop, dp=dp, exact=exact)[-1]
+    bulk_shr = utils.mag(*wind_shear(prof, pbot=pbot, ptop=ptop))
+
+    hodo_curve = tot_shr / bulk_shr
+
+    return hodo_curve
 
 def non_parcel_bunkers_motion_experimental(prof):
     '''

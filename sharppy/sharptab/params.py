@@ -22,7 +22,7 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_mixratio', 'mean_wetbulb', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_thetawv', 'mean_relh']
+__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_omega', 'mean_mixratio', 'mean_wetbulb', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_thetawv', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
@@ -32,12 +32,13 @@ __all__ += ['alt_stg', 'spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci',
 __all__ += ['esi', 'vgp', 'aded_v1', 'aded_v2', 'ei', 'eehi', 'strong_tor', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
-__all__ += ['hi', 'ulii', 'ssi', 'fmi', 'martin', 'csv', 'z_index', 'k_high_v1', 'k_high_v2', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
+__all__ += ['hi', 'ulii', 'ssi850', 'fmi', 'martin', 'csv', 'z_index', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'cs', 'wmaxshear', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2', 'brooks_b']
+__all__ += ['mvv', 'tsi', 'jli', 'gdi', 'cs_index', 'wmaxshear', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2', 'brooks_b']
 __all__ += ['cpst_v1', 'cpst_v2', 'cpst_v3']
 __all__ += ['tie']
 __all__ += ['t1_gust', 't2_gust']
+__all__ += ['k_high_v1', 'k_high_v2', 'hltt', 'ssi700', 'khltt', 'kti', 'waci']
 
 class DefineParcel(object):
     '''
@@ -2335,7 +2336,7 @@ def bulk_rich(prof, pcl):
     # Make sure parcel is initialized
     if not utils.QC(pcl.lplvals):
         pbot = ma.masked
-    elif pcl.lplvals.flag > 0 and pcl.lplvals.flag < 4:
+    elif pcl.lplvals.flag > 0 and pcl.lplvals.flag < 5 or pcl.lplvals.flag == 7:
         ptop = interp.pres(prof, interp.to_msl(prof, 6000.))
         pbot = prof.pres[prof.sfc]
     else:
@@ -4894,9 +4895,9 @@ def ulii(prof):
 
     return ulii
 
-def ssi(prof):
+def ssi850(prof):
     '''
-        Showalter Stability Index (*)
+        Showalter Stability Index, 850 mb version (*)
 
         This index, one of the first forecasting indices ever constructed, lifts a parcel
         from 850 mb to 500 mb, then compares it with the ambient temperature (similar to
@@ -4913,8 +4914,8 @@ def ssi(prof):
 
         Returns
         -------
-        ssi : number
-            Showalter Stability Index (number)
+        ssi850 : number
+            Showalter Stability Index, 850 mb version (number)
     '''
 
     tmp850 = interp.temp(prof, 850)
@@ -4924,9 +4925,9 @@ def ssi(prof):
     t_pcl85 = thermo.lifted(850, tmp850, dpt850, 500)
     vt_pcl85 = thermo.virtemp(500, t_pcl85, t_pcl85)
 
-    ssi = vtp500 - vt_pcl85
+    ssi850 = vtp500 - vt_pcl85
 
-    return ssi
+    return ssi850
 
 def fmi(prof):
     '''
@@ -5233,64 +5234,6 @@ def z_index(prof):
 
     return z_index
 
-def k_high_v1(prof):
-    '''
-        K-Index, high altitude version 1 (*)
-
-        Formulation taken from Modahl 1979, JAM v.18 pg. 675.
-
-        This index was derived by A. Modahl as a variant of the K-Index to be used in high-altitude areas.
-        However, testing of the initial modified version (version 1) suggested that omitting the
-        temperature lapse rate term and leaving just the 850 mb dewpoint temperature and 500 mb dewpoint
-        depression terms (version 2) would give results similar to the initial version.
-
-        Parameters
-        ----------
-        prof : Profile object
-
-        Returns
-        -------
-        k_high_v1 : number
-            K-Index, high altitude version 1
-    '''
-
-    tmp700 = interp.temp(prof, 700)
-    tmp300 = interp.temp(prof, 300)
-    dpt850 = interp.dwpt(prof, 850)
-    tdd500 = interp.tdd(prof, 500)
-
-    k_high_v1 = ( tmp700 - tmp300 ) + dpt850 - tdd500
-
-    return k_high_v1
-
-def k_high_v2(prof):
-    '''
-        K-Index, high altitude version 2 (*)
-
-        Formulation taken from Modahl 1979, JAM v.18 pg. 675.
-
-        This index was derived by A. Modahl as a variant of the K-Index to be used in high-altitude areas.
-        However, testing of the initial modified version (version 1) suggested that omitting the
-        temperature lapse rate term and leaving just the 850 mb dewpoint temperature and 500 mb dewpoint
-        depression terms (version 2) would give results similar to the initial version.
-
-        Parameters
-        ----------
-        prof : Profile object
-
-        Returns
-        -------
-        k_high_v2 : number
-            K-Index, high altitude version 2
-    '''
-
-    dpt850 = interp.dwpt(prof, 850)
-    tdd500 = interp.tdd(prof, 500)
-
-    k_high_v2 = dpt850 - tdd500
-
-    return k_high_v2
-
 def swiss00(prof):
     '''
         Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (SWISS00) (*)
@@ -5310,7 +5253,7 @@ def swiss00(prof):
             Stability and Wind Shear index for thunderstorms in Switzerland, 00z version (number)
     '''
 
-    si850 = getattr(prof, 'ssi', ssi(prof))
+    si850 = getattr(prof, 'ssi850', ssi850(prof))
     p3km, p6km = interp.pres(prof, interp.to_msl(prof, np.array([3000., 6000.])))
     ws36 = utils.KTS2MS(utils.mag(*winds.wind_shear(prof, pbot=p3km, ptop=p6km)))
     tdd600 = interp.tdd(prof, 600)
@@ -5658,7 +5601,108 @@ def jli(prof):
 
     return jli
 
-def cs(prof):
+def gdi(prof, exact=False):
+    '''
+        Galvez-Davison Index (*)
+
+        Formulation takem from:
+        The Galvez-Davison Index for Tropical Convection
+        Galvez and Davison, 2016
+        (Available at http://wpc.ncep.noaa.gov/international/gdi/)
+
+        This index was developed in an effort to improve forecasting of convection in tropical
+        climates.  It is an almagamation of four separate sub-indices, each of which measures an
+        important parameter for tropical convection:
+
+        Column Buoyancy Index (CBI) : Describes the availability of heat and moisture in a column
+        of air.  This index is the only sub-index to produce positive values, and as such can be
+        considered the enhancement sub-index.
+        Mid-tropospheric Warming Index (MWI) : Accounts for stabilization/destabilization in
+        association with warm ridges/cool troughs in the mid-troposphere.  It is an inhibition sub-
+        index, meaning it only produces negative numbers.
+        Inversion Index (II) : Designed to capture the effects of trade wind inversions, specifically
+        two processes that can inhibit convection: stability across the inversion and dry air
+        entrainment.  Since it is an inhibition sub-index, it only produces negative numbers.
+        Terrain Correction (TC) : While the GDI should, strictly speaking, only be applicable in
+        places that are located below the 950 hPa level, numerical models usually interpolate data so
+        as to fill in layers that are below ground level in reality.  The TC sub-index is intended to
+        be a correction factor to keep model-derived GDI values in high-altitude regions from becoming
+        unrealistically high.
+
+        One note to be aware of: The index makes use of the equivalent potential temperature (theta-e)
+        of several layers.  The source paper suggests using a proxy equation to estimate the theta-e
+        values.  However, anyone who desires more accuracy in the calculations should use SHARPpy's
+        built-in theta-e formula to calculate theta-e.  This should be done by setting the "exact"
+        parameter to "True".  One must, however, be aware that the use of the proxy formula could end
+        up producing a GDI value that is noticeably different from a value produced from the SHARPpy
+        formula (though some attempt has been made to balance the SHARPpy-based values so as to be
+        closer to those produced with the proxy equations.).
+
+        Parameters
+        ----------
+        prof : Profile object
+        exact : bool (optional; default = False)
+        Switch between using SHARPpy's built-in theta-e formula (slower) or using the source paper's
+        recommended proxy formula (faster)
+
+        Returns
+        -------
+        gdi : number
+            Galvez-Davison Index (number)
+    '''
+
+    psfc = prof.pres[prof.sfc]
+    tmp950 = interp.temp(prof, 950)
+    dpt950 = interp.dwpt(prof, 950)
+    tmp850 = interp.temp(prof, 850)
+    dpt850 = interp.dwpt(prof, 850)
+    tmp700 = interp.temp(prof, 700)
+    dpt700 = interp.dwpt(prof, 700)
+    tmp500 = interp.temp(prof, 500)
+    dpt500 = interp.dwpt(prof, 500)
+
+    if exact:
+        thte950 = interp.thetae(prof, 950)
+        thte857 = ( ( interp.thetae(prof, 850) + interp.thetae(prof, 700) ) / 2 ) - 11.89
+        thte500 = interp.thetae(prof, 500) - 11.9
+    else:
+        tht950 = thermo.ctok(thermo.theta(950, tmp950))
+        tht857 = thermo.ctok( ( thermo.theta(850, tmp850) + thermo.theta(700, tmp700) ) / 2 )
+        tht500 = thermo.ctok(thermo.theta(500, tmp500))
+        mxr950 = thermo.mixratio(950, dpt950) / 1000
+        mxr857 = ( ( thermo.mixratio(850, dpt850) + thermo.mixratio(700, dpt700) ) / 2 ) / 1000
+        mxr500 = thermo.mixratio(500, dpt500) / 1000
+        thte950 = tht950 * np.exp( ( 2.69e6 * mxr950 ) / ( 1005.7 * thermo.ctok(tmp850) ) )
+        thte857 = tht857 * np.exp( ( 2.69e6 * mxr857 ) / ( 1005.7 * thermo.ctok(tmp850) ) ) - 10
+        thte500 = tht500 * np.exp( ( 2.69e6 * mxr500 ) / ( 1005.7 * thermo.ctok(tmp850) ) ) - 10
+    
+    me = thte500 - 303
+    le = thte950 - 303
+
+    if le > 0:
+        cbi = 6.5e-2 * me * le
+    else:
+        cbi = 0
+    
+    if tmp500 + 10 > 0:
+        mwi = -7 * ( tmp500 + 10 )
+    else:
+        mwi = 0
+    
+    lr_97 = tmp950 - tmp700
+    lr_thte879 = thte857 - thte950
+    if lr_97 + lr_thte879 > 0:
+        ii = 0
+    else:
+        ii = 1.5 * ( lr_97 + lr_thte879 )
+    
+    tc =  18 - ( 9000 / ( psfc - 500 ) )
+
+    gdi = cbi + mwi + ii + tc
+
+    return gdi
+
+def cs_index(prof):
     '''
         CS Index (*)
 
@@ -5678,7 +5722,7 @@ def cs(prof):
 
         Returns
         -------
-        cs : number
+        cs_index : number
             CS Index (number)
     '''
 
@@ -5694,9 +5738,9 @@ def cs(prof):
     dy = mnuv - mnlv
     shr = utils.KTS2MS(utils.mag(dx, dy))
 
-    cs = cnvc_cape * shr
+    cs_index = cnvc_cape * shr
 
-    return cs
+    return cs_index
 
 def wmaxshear(prof):
     '''
@@ -6567,3 +6611,289 @@ def t2_gust(prof):
         t2_dir = utils.comp2vec(mn_wd_10_14[0], mn_wd_10_14[1])[0]
     
     return t2_min, t2_avg, t2_max, t2_dir
+
+def k_high_v1(prof):
+    '''
+        K-Index, high altitude version 1 (*)
+
+        Formulation taken from Modahl 1979, JAM v.18 pg. 675.
+
+        This index was derived by A. Modahl as a variant of the K-Index to be used in high-altitude areas.
+        However, testing of the initial modified version (version 1) suggested that omitting the
+        temperature lapse rate term and leaving just the 850 mb dewpoint temperature and 500 mb dewpoint
+        depression terms (version 2) would give results similar to the initial version.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        k_high_v1 : number
+            K-Index, high altitude version 1
+    '''
+
+    tmp700 = interp.temp(prof, 700)
+    tmp300 = interp.temp(prof, 300)
+    dpt850 = interp.dwpt(prof, 850)
+    tdd500 = interp.tdd(prof, 500)
+
+    k_high_v1 = ( tmp700 - tmp300 ) + dpt850 - tdd500
+
+    return k_high_v1
+
+def k_high_v2(prof):
+    '''
+        K-Index, high altitude version 2 (*)
+
+        Formulation taken from Modahl 1979, JAM v.18 pg. 675.
+
+        This index was derived by A. Modahl as a variant of the K-Index to be used in high-altitude areas.
+        However, testing of the initial modified version (version 1) suggested that omitting the
+        temperature lapse rate term and leaving just the 850 mb dewpoint temperature and 500 mb dewpoint
+        depression terms (version 2) would give results similar to the initial version.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        k_high_v2 : number
+            K-Index, high altitude version 2
+    '''
+
+    dpt850 = interp.dwpt(prof, 850)
+    tdd500 = interp.tdd(prof, 500)
+
+    k_high_v2 = dpt850 - tdd500
+
+    return k_high_v2
+
+def hltt(prof):
+    '''
+        High-Level Total Totals (HLTT) (*)
+
+        Formulation taken from:
+        A Modified Total Totals Index for Thunderstorm Potential Over the Intermountain West
+        Milne, 2004
+        (Available at https://www.weather.gov/media/wrh/online_publications/TAs/ta0404.pdf)
+
+        This index is a modification of the Total Totals index (q.v.) that is modified for use in high-altitude
+        terrain (e.g. the Intermountain West of the United States).  It replaces the 850 mb temperature and
+        dewpoint variables with 700 mb temperature and dewpoint, since the 850 mb level will usually be
+        underneath ground level.  Threshold values for the HLTT are lower than their equivalents for the
+        original Total Totals, as demonstrated below:
+
+        28 - 29 : Isolated thunderstorms possible.
+        29 - 30 : Isolated thunderstorms
+        31 - 32 : Isolated to scattered thunderstorms
+        Above 32 : Scattered to numerous thunderstorms
+
+        This index should be used with caution, particularly in the winter months, as high HLTT values can still
+        be achieved even when the lower level temperature and dewpoint are below freezing.  It is best used in
+        the summer months, especially when the 500 mb temperature is below -15 degrees Celsius.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        hltt : number
+            High Level Total Totals (number)
+    '''
+
+    tmp700 = interp.temp(prof, 700)
+    dpt700 = interp.dwpt(prof, 700)
+    tmp500 = interp.temp(prof, 500)
+
+    hltt = tmp700 + dpt700 - ( 2 * tmp500 )
+
+    return hltt
+
+def ssi700(prof):
+    '''
+        Showalter Stability Index, 700 mb version (*)
+
+        This index is a modification of the Showalter Stability Index (q.v.) which raises a parcel from the 700 mb
+        level instead of the 850 mb level.  This is intended to make it useable for predicting convective weather
+        over high-altitude terrain.  As such, threshold values for this index should be assumed to generally be
+        higher than the original index.
+
+        The version implemented here uses the virtual temperature correction.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        ssi700 : number
+            Showalter Stability Index, 700 mb version (number)
+    '''
+
+    tmp700 = interp.temp(prof, 700)
+    dpt700 = interp.dwpt(prof, 700)
+    vtp500 = interp.vtmp(prof, 500)
+
+    t_pcl75 = thermo.lifted(850, tmp700, dpt700, 500)
+    vt_pcl75 = thermo.virtemp(500, t_pcl75, t_pcl75)
+
+    ssi700 = vtp500 - vt_pcl75
+
+    return ssi700
+
+def khltt(prof):
+    '''
+        Kabul High Level Total Totals (*)
+
+        Formulation taken from:
+        Climate and Weather Analysis of Afghan Thunderstorms
+        Geis, 2011
+        (Available at https://apps.dtic.mil/dtic/tr/fulltext/u2/a551911.pdf)
+
+        This index was derived in an effort to improve the forecasting of convective weather over the elevated
+        desert terrain of Afghanistan.  It is based on the High Level Total Totals (q.v.), but uses the 800 mb
+        temperature and dewpoint and the 700 mb temperature in lieu of (respectively) the 700 mb temperature
+        and dewpoint and the 500 mb temperature.  This modification was made in an effort to reduce false alarm
+        rates.
+
+        The source paper notes that thunderstorms are more (less) likely when the values are positive (negative);
+        however, verification statistics still show some overlap between the thunderstorm and non-thunderstorm
+        categories in the value range of -5 to 5.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        khltt : number
+            Kabul High Level Total Totals (number)
+    '''
+
+    tmp800 = interp.temp(prof, 800)
+    dpt800 = interp.dwpt(prof, 800)
+    tmp700 = interp.temp(prof, 700)
+
+    khltt = tmp800 + dpt800 - ( 2 * tmp700 )
+
+    return khltt
+
+def kti(prof):
+    '''
+        Kabul Thunderstorm Index (KTI) (*)
+
+        Formulation taken from:
+        Climate and Weather Analysis of Afghan Thunderstorms
+        Geis, 2011
+        (Available at https://apps.dtic.mil/dtic/tr/fulltext/u2/a551911.pdf)
+
+        This index was derived in an effort to improve the forecasting of convective weather over the elevated
+        desert terrain of Afghanistan.  The source paper's formula takes the 800 mb temperature and subtracts
+        it by twice the 800 mb dewpoint.  The implementation used here subtracts the 800 mb dewpoint depression
+        by the 800 mb dewpoint, effectively giving the same result.
+
+        The source paper's verification statistics suggest that values below 25 should be considered a good
+        indicator of increased chances for thunderstorms, though there is some overlap between the thunderstorm
+        and non-thunderstorm categories in the value range of 17 to 25.  The paper also notes that the false alarm
+        rate for the KTI is even lower still than the Kabul High Level Total Totals (q.v.).
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        kti : number
+            Kabul Thunderstorm Index (number)
+    '''
+
+    tdd800 = interp.tdd(prof, 800)
+    dpt800 = interp.dwpt(prof, 800)
+
+    kti = tdd800 - dpt800
+
+    return kti
+
+def waci(prof):
+    '''
+        Wind Adjusted Convective Index (WACI) (*)
+
+        Formulation taken from:
+        Severe Weather as Seen Via a Preliminary Sounding Climatology and a Wind Adjusted Convective Index (WACI)
+        Small, 2004
+        (Available at http://ams.confex.com/ams/pdfpapers/72344.pdf)
+
+        This index was derived in an effort to improve forecasting of severe weather and flooding conditions over
+        southern California.  It makes use of a lifted index derived from a 750 mb parcel (which is assumed to be
+        saturated at the start), a moisture modifier based on the 600 mb and 750 mb dewpoint depressions, a wind
+        adjustment term based on the 500 mb wind speed, and a constant intended to make sure that the values of
+        the WACI resemble those of the Total Totals index (q.v.)
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        waci : number
+            Wind Adjusted Convective Index (number)
+    '''
+
+    tmp750 = interp.temp(prof, 750)
+    tdd750 = interp.tdd(prof, 750)
+    tdd600 = interp.tdd(prof, 600)
+    vtp500 = interp.vtmp(prof, 500)
+    spd500 = interp.vec(prof, 500)[1]
+
+    waci_const = 30.
+
+    # Calculate the 750 mb saturated lifted index, with vitrual temperature correction
+    pcl_tmp500 = thermo.wetlift(750, tmp750, 500)
+    pcl_vtp500 = thermo.virtemp(500, pcl_tmp500, pcl_tmp500)
+    sat_li = vtp500 - pcl_vtp500
+    if sat_li < -8.:
+        sat_li_code = -8.
+    elif sat_li > -1.:
+        sat_li_code = -1.
+    else:
+        sat_li_code = sat_li
+    
+    # Calculate the moisture modifier
+    if tdd600 < 4.:
+        tdd600_code = 10. + ( tdd600 - 4. )
+    elif tdd600 == 4.:
+        tdd600_code = 10.
+    elif tdd600 > 4. and tdd600 <= 8.:
+        tdd600_code = 10. - ( 2. * ( tdd600 - 4. ) )
+    elif tdd600 > 8. and tdd600 <= 9.5:
+        tdd600_code = 2. - ( tdd600 - 8. )
+    elif tdd600 > 9.5 and tdd600 <= 15:
+        tdd600_code = 0.5
+    else:
+        tdd600_code = 0.
+    
+    if tdd750 < 4.:
+        tdd750_code = 10. + ( tdd750 - 4. )
+    elif tdd750 == 4.:
+        tdd750_code = 10.
+    elif tdd750 > 4. and tdd750 <= 8.:
+        tdd750_code = 10. - ( 2. * ( tdd750 - 4. ) )
+    elif tdd750 > 8. and tdd750 <= 9.5:
+        tdd750_code = 2. - ( tdd750 - 8. )
+    elif tdd750 > 9.5 and tdd750 <= 15:
+        tdd750_code = 0.5
+    else:
+        tdd750_code = 0.
+    
+    moist_mod = ( tdd600_code + ( 2. * tdd750_code ) ) / 3.
+
+    # Calculate the wind adjustment
+    spd500_code = spd500 / 2.
+
+    # Calculate WACI
+    waci = ( -1. *  sat_li_code * moist_mod ) - spd500_code + waci_const
+
+    return waci
