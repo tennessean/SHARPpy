@@ -34,10 +34,11 @@ __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
 __all__ += ['hi', 'ulii', 'ssi850', 'fmi', 'martin', 'csv', 'z_index', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
-__all__ += ['mvv', 'tsi', 'jli', 'gdi', 'cs_index', 'wmaxshear', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2', 'brooks_b']
+__all__ += ['mvv', 'jli', 'gdi', 'cs_index', 'wmaxshear', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2', 'brooks_b']
 __all__ += ['cpst_v1', 'cpst_v2', 'cpst_v3']
 __all__ += ['tie']
 __all__ += ['t1_gust', 't2_gust']
+__all__ += ['tsi', 'hsev', 'hsiz']
 __all__ += ['k_high_v1', 'k_high_v2', 'hltt', 'ssi700', 'khltt', 'kti', 'waci']
 
 class DefineParcel(object):
@@ -5522,48 +5523,6 @@ def mvv(prof, pcl):
 
     return mvv
 
-def tsi(prof, pcl, hbot, htop, stu=0, stv=0):
-    '''
-        Thunderstorm Severity Index (*)
-
-        This index is used to help measure and predict the severity of
-        thunderstorm events, using a regression equation based around instability,
-        shear, helicity, and storm motion.  Lower values indicate higher
-        potential severity of a thunderstorm event; however, this is all
-        contigent on whether or not thunderstorms actually do occur.
-
-        Parameters
-        ----------
-        prof : Profile object
-        pcl : Parcel object
-        hbot : number
-            Height of the bottom of the helicity layer [m]
-        htop : number
-            Height of the top of the helicity layer [m]
-        stu : number
-            Storm-relative wind U component [kts]
-            (optional; default=0)
-        stv : number
-            Storm-relative wind V component [kts]
-            (optional; default=0)
-
-        Returns
-        -------
-        tsi : number
-            Thunderstorm Severity Index (number)
-    '''
-
-    hght_t = interp.to_agl(prof, prof.hght[prof.top])
-    wmax_c = winds.max_wind(prof, 0, hght_t, all=False)
-    wmax = utils.mag(wmax_c[0], wmax_c[1], missing=MISSING)
-    srh = winds.helicity(prof, hbot, htop, stu = stu, stv = stv)[0]
-    ehis = getattr(prof, 'ehi', ehi(prof, pcl, hbot, htop, stu = stu, stv = stv))
-    sspd = utils.mag(stu, stv, missing=MISSING)
-
-    tsi = 4.943709 - ( 0.000777 * pcl.bplus ) - ( 0.004005 * wmax ) + ( 0.181217 * ehis ) - ( 0.026867 * sspd ) - (0.006479 * srh )
-
-    return tsi
-
 def jli(prof):
     '''
         Johnson Lag Index (*)
@@ -6611,6 +6570,146 @@ def t2_gust(prof):
         t2_dir = utils.comp2vec(mn_wd_10_14[0], mn_wd_10_14[1])[0]
     
     return t2_min, t2_avg, t2_max, t2_dir
+
+def tsi(prof):
+    '''
+        Thunderstorm Severity Index (*)
+
+        This index is used to help measure and predict the severity of
+        thunderstorm events, using a regression equation based around instability,
+        shear, helicity, and storm motion.  Lower values indicate higher
+        potential severity of a thunderstorm event; however, this is all
+        contigent on whether or not thunderstorms actually do occur.
+
+        Parameters
+        ----------
+        prof : Profile object
+        
+        Returns
+        -------
+        tsi : number
+            Thunderstorm Severity Index (number)
+    '''
+
+    sbpcl = getattr(prof, 'sfcpcl', parcelx(prof, flag=1))
+    hght_t = interp.to_agl(prof, prof.hght[prof.top])
+    wmax_c = winds.max_wind(prof, 0, hght_t, all=False)
+    wmax = utils.mag(wmax_c[0], wmax_c[1], missing=MISSING)
+    srwind = bunkers_storm_motion(prof)
+    srh03 = winds.helicity(prof, 0, 3000, stu = srwind[0], stv = srwind[1])[0]
+    ehi03 = ehi(prof, sbpcl, 0, 3000, stu = srwind[0], stv = srwind[1])
+    sspd = utils.mag(srwind[0], srwind[1], missing=MISSING)
+
+    tsi = 4.943709 - ( 0.000777 * sbpcl.bplus ) - ( 0.004005 * wmax ) + ( 0.181217 * ehi03 ) - ( 0.026867 * sspd ) - (0.006479 * srh03 )
+
+    return tsi
+
+def hsev(prof):
+    '''
+        Hail Severity Equation (*)
+
+        Formulation taken from LaPenta et. al. 2000, NWD v.24 pg. 55.
+
+        This index is a regression equation (labeled as "CAT" in the source paper) that is intended to help
+        predict the possible severity of a hail event (which the source paper defines as being a function of
+        both reported hail size and the number of hail reports).  It makes use of six parameters: most unstable
+        CAPE, most unstable equilibrium level (in thousands of feet), the value of the Total Totals index, 0-3
+        km AGL storm-relative helicity, 850 mb temperature, and deviation of the wetbulb zero (WBZ) altitude
+        from 10,000 feet AGL (measured as a set of categories each representing a range of WBZ values).
+        However, this index is not intended to forecast thunderstorms in general, and as such is congruent
+        upon thunderstorm development.
+
+        The source paper establishes a set of threshold values for hailstorm severity:
+        HSEV < 3.5 : no severe hail
+        3.5 <= HSEV < 5.5 : minor severe hail
+        5.5 <= HSEV < 7.5 : major severe hail
+        7.5 <= HSEV : extreme severe hail
+        Note, however, that this index was originally constructed for use in the general region of New York state.
+        Threshold values may have to be adjusted for other regions.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        hsev : number
+            Hail Severity Equation (number)
+    '''
+
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
+    tt = getattr(prof, 'total_totals', t_totals(prof))
+    wbzh = wbz(prof)[1]
+
+    eqlv = utils.M2FT(mupcl.elhght) / 1000
+    mucp = mupcl.bplus
+    srwinds = bunkers_storm_motion(prof)
+    srh03 = winds.helicity(prof, 0, 3000, stu = srwinds[0], stv = srwinds[1])[0]
+    tmp850 = interp.temp(prof, 850)
+
+    if wbzh < 8000 or ( 12000 < wbzh and wbzh <= 13000 ):
+        wbzcat = 2
+    elif ( 8000 <= wbzh and wbzh < 9000 ) or ( 11000 < wbzh and wbzh <= 12000 ):
+        wbzcat = 1
+    elif 9000 <= wbzh and wbzh <= 11000:
+        wbzcat = 0
+    elif 13000 < wbzh and wbzh <= 14000:
+        wbzcat = 3
+    else:
+        wbzcat = 4
+    
+    hsev = ( 0.144 * eqlv ) - ( 0.502 * wbzcat ) + ( 0.00182 * mucp ) + ( 0.0804 * tt ) + ( 0.00605 * srh03 ) + ( 0.203 * tmp850 ) + 0.153
+
+    return hsev
+
+def hsiz(prof):
+    '''
+        Hail Size Equation (*)
+
+        Formulation taken from LaPenta et. al. 2000, NWD v.24 pg. 55.
+
+        This index is a regression equation (labeled as "SIZE" in the source paper) that is intended to help
+        predict the possible size (in inches) of hail produced by a hailstorm.  It makes use of six parameters:
+        most unstable CAPE, most unstable equilibrium level (in thousands of feet), the value of the Total
+        Totals index, 0-3 km AGL storm-relative helicity, 850 mb temperature, and deviation of the wetbulb
+        zero (WBZ) altitude from 10,000 feet AGL (measured as a set of categories each representing a range
+        of WBZ values).  However, this index is not intended to forecast thunderstorms in general, and as
+        such is congruent upon thunderstorm development.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        hsiz : inches
+            Hail Size Equation (inches)
+    '''
+
+    mupcl = getattr(prof, 'mupcl', parcelx(prof, flag=3))
+    tt = getattr(prof, 'total_totals', t_totals(prof))
+    wbzh = wbz(prof)[1]
+
+    eqlv = utils.M2FT(mupcl.elhght) / 1000
+    mucp = mupcl.bplus
+    srwinds = bunkers_storm_motion(prof)
+    srh03 = winds.helicity(prof, 0, 3000, stu = srwinds[0], stv = srwinds[1])[0]
+    tmp850 = interp.temp(prof, 850)
+
+    if wbzh < 8000 or ( 12000 < wbzh and wbzh <= 13000 ):
+        wbzcat = 2
+    elif ( 8000 <= wbzh and wbzh < 9000 ) or ( 11000 < wbzh and wbzh <= 12000 ):
+        wbzcat = 1
+    elif 9000 <= wbzh and wbzh <= 11000:
+        wbzcat = 0
+    elif 13000 < wbzh and wbzh <= 14000:
+        wbzcat = 3
+    else:
+        wbzcat = 4
+    
+    hsiz = ( -0.0318 * eqlv ) + ( 0.000483 * mucp ) + ( 0.0235 * tt ) + ( 0.00233 * srh03 ) - ( 0.124 * wbzcat ) + ( 0.0548 * tmp850 ) - 0.772
+
+    return hsiz
 
 def k_high_v1(prof):
     '''
