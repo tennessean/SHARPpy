@@ -400,6 +400,7 @@ def inis(prof, pbot=850, ptop=250, dp=-50, exact=True):
         wdir2, wspd2 = interp.vec(prof, ptop)
         wdr = np.concatenate([[wdir1], prof.wdir[ind1:ind2+1].compressed(), [wdir2]])
         wsp = np.concatenate([[wspd1], prof.wspd[ind1:ind2+1].compressed(), [wspd2]])
+        wsp = utils.KTS2MS(wsp)
         ind3 = ma.where(~prof.wspd[ind1:ind2+1].mask == True)[0] + ind1
         preslvls = prof.pres[ind3]
         dplv = np.concatenate([[pbot - preslvls[0]], preslvls[:-1] - preslvls[1:], [preslvls[-1] - ptop]])
@@ -407,6 +408,7 @@ def inis(prof, pbot=850, ptop=250, dp=-50, exact=True):
     else:
         ps = np.arange(pbot, ptop+dp, dp)
         wdr, wsp = interp.vec(prof, ps)
+        wsp = utils.KTS2MS(wsp)
         dplv = np.fabs(dp)
         dpt = ps[0] - ps[-1]
     
