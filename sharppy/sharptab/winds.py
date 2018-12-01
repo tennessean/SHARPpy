@@ -7,7 +7,7 @@ from sharppy.sharptab.constants import *
 import warnings
 
 __all__ = ['mean_wind', 'mean_wind_npw', 'mean_wind_old', 'mean_wind_npw_old']
-__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'norm_wind_shear', 'total_shear', 'norm_total_shear', 'hodo_curve', 'helicity', 'max_wind']
+__all__ += ['sr_wind', 'sr_wind_npw', 'wind_shear', 'norm_wind_shear', 'total_shear', 'norm_total_shear', 'hodo_curve', 'inis', 'helicity', 'max_wind']
 __all__ += ['non_parcel_bunkers_motion', 'corfidi_mcs_motion', 'mbe_vectors']
 __all__ += ['non_parcel_bunkers_motion_experimental', 'critical_angle']
 
@@ -358,6 +358,73 @@ def hodo_curve(prof, pbot=850, ptop=250, dp=-1, exact=True):
 
     return hodo_curve
 
+def inis(prof, pbot=850, ptop=250, dp=-50, exact=True):
+    '''
+    Formulation taken from Colquhoun and Shepherd 1989, MWR v.4 pg. 38.
+
+    Calculates the sum of two components of shear over a layer, divided by the
+    thickness of the layer.  The two components are listed below:
+
+    (1.) IN : The component of shear normal to the wind at the base of a given
+    layer; relates to directional shear.
+    (2.) IS : The component of shear in the direction of the wind at the base
+    of a given layer; relates to speed shear.
+
+    The calculation is essentially similar in concept to normalized total shear
+    (q.v.).
+
+    Parameters
+    ----------
+    prof: profile object
+        Profile object
+    pbot : number (optional; default 850 hPa)
+        Pressure of the bottom level (hPa)
+    ptop : number (optional; default 250 hPa)
+        Pressure of the top level (hPa)
+    dp : negative integer (optional; default -50)
+        The pressure increment for the interpolated sounding
+    exact : bool (optional; default = True)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+
+    Returns
+    -------
+    inis : number
+        INIS (number)
+    '''
+
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        wdir1, wspd1 = interp.vec(prof, pbot)
+        wdir2, wspd2 = interp.vec(prof, ptop)
+        wdr = np.concatenate([[wdir1], prof.wdir[ind1:ind2+1].compressed(), [wdir2]])
+        wsp = np.concatenate([[wspd1], prof.wspd[ind1:ind2+1].compressed(), [wspd2]])
+        ind3 = ma.where(~prof.wspd[ind1:ind2+1].mask == True)[0] + ind1
+        preslvls = prof.pres[ind3]
+        dplv = np.concatenate([[pbot - preslvls[0]], preslvls[:-1] - preslvls[1:], [preslvls[-1] - ptop]])
+        dpt = pbot - ptop
+    else:
+        ps = np.arange(pbot, ptop+dp, dp)
+        wdr, wsp = interp.vec(prof, ps)
+        dplv = np.fabs(dp)
+        dpt = ps[0] - ps[-1]
+    
+    t_wdr = wdr[1:]
+    mod = 180 - wdr[:-1]
+    t_wdr = t_wdr + mod
+    idx1 = ma.where(t_wdr < 0)[0]
+    idx2 = ma.where(t_wdr >= 360)[0]
+    t_wdr[idx1] = t_wdr[idx1] + 360
+    t_wdr[idx2] = t_wdr[idx2] - 360
+    dwdr = np.fabs(t_wdr - 180)
+    
+    l_in = wsp[1:] * np.sin(np.radians(dwdr))
+    l_is = ( wsp[1:] * np.cos(np.radians(dwdr)) ) - wsp[:-1]
+    inis = ( ( l_in * dplv ).sum() + ( l_is * dplv ).sum() ) / ( dpt )
+    
+    return inis
+
 def non_parcel_bunkers_motion_experimental(prof):
     '''
         Compute the Bunkers Storm Motion for a Right Moving Supercell
@@ -496,8 +563,8 @@ def helicity(prof, lower, upper, stu=0, stv=0, dp=-1, exact=True):
             type(plower) == type(ma.masked) or type(pupper) == type(ma.masked):
             return np.ma.masked, np.ma.masked, np.ma.masked
         if exact:
-            ind1 = np.where(plower >= prof.pres)[0].min()
-            ind2 = np.where(pupper <= prof.pres)[0].max()
+            ind1 = np.where(plower > prof.pres)[0].min()
+            ind2 = np.where(pupper < prof.pres)[0].max()
             u1, v1 = interp.components(prof, plower)
             u2, v2 = interp.components(prof, pupper)
             u = np.concatenate([[u1], prof.u[ind1:ind2+1].compressed(), [u2]])
