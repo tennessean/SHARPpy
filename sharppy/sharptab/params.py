@@ -22,7 +22,8 @@ from sharppy.sharptab.constants import *
 
 __all__ = ['DefineParcel', 'Parcel', 'inferred_temp_adv']
 __all__ += ['k_index', 't_totals', 'c_totals', 'v_totals', 'precip_water']
-__all__ += ['inversion', 'temp_lvl', 'max_temp', 'mean_omega', 'mean_mixratio', 'mean_wetbulb', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_thetawv', 'mean_relh']
+__all__ += ['inversion', 'temp_lvl', 'max_temp']
+__all__ += ['mean_omega', 'mean_mixratio', 'mean_dewpoint', 'mean_wetbulb', 'mean_theta', 'mean_thetae', 'mean_thetaes', 'mean_thetaw', 'mean_thetaws', 'mean_thetawv', 'mean_relh']
 __all__ += ['lapse_rate', 'most_unstable_level', 'parcelx', 'bulk_rich']
 __all__ += ['bunkers_storm_motion', 'effective_inflow_layer']
 __all__ += ['convective_temp', 'esp', 'pbl_top', 'precip_eff', 'dcape', 'sig_severe']
@@ -32,7 +33,7 @@ __all__ += ['alt_stg', 'spot', 'wbz', 'thomp', 'tq', 's_index', 'boyden', 'dci',
 __all__ += ['esi', 'vgp', 'aded_v1', 'aded_v2', 'ei', 'eehi', 'strong_tor', 'vtp']
 __all__ += ['snsq', 'snow']
 __all__ += ['windex_v1', 'windex_v2', 'gustex_v1', 'gustex_v2', 'gustex_v3', 'gustex_v4', 'wmsi', 'dmpi_v1', 'dmpi_v2', 'hmi', 'mwpi']
-__all__ += ['hi', 'ulii', 'ssi850', 'fmi', 'martin', 'csv', 'z_index', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
+__all__ += ['hi', 'ulii', 'ssi850', 'fmwi', 'fmdi', 'martin', 'csv', 'z_index', 'swiss00', 'swiss12', 'fin', 'yon_v1', 'yon_v2']
 __all__ += ['fsi', 'fog_point', 'fog_threat']
 __all__ += ['mvv', 'jli', 'gdi', 'cs_index', 'wmaxshear', 'ncape', 'ncinh', 'lsi', 'mcsi_v1', 'mcsi_v2', 'mosh', 'moshe', 'cii_v1', 'cii_v2', 'brooks_b']
 __all__ += ['cpst_v1', 'cpst_v2', 'cpst_v3']
@@ -1086,6 +1087,54 @@ def mean_mixratio(prof, pbot=None, ptop=None, dp=-1, exact=False):
         w = ma.average(thermo.mixratio(p, dwpt))
     return w
 
+def mean_dewpoint(prof, pbot=None, ptop=None, dp=-1, exact=False):
+    '''
+        Calculates the mean dewpoint temperature from a profile object within the
+        specified layer.
+        
+        Parameters
+        ----------
+        prof : profile object
+        Profile Object
+        pbot : number (optional; default surface)
+        Pressure of the bottom level (hPa)
+        ptop : number (optional; default 400 hPa)
+        Pressure of the top level (hPa)
+        dp : negative integer (optional; default = -1)
+        The pressure increment for the interpolated sounding
+        exact : bool (optional; default = False)
+        Switch to choose between using the exact data (slower) or using
+        interpolated sounding at 'dp' pressure levels (faster)
+        
+        Returns
+        -------
+        Mean Dewpoint temperature
+        
+        '''
+    if not pbot: pbot = prof.pres[prof.sfc]
+    if not ptop: ptop = prof.pres[prof.sfc] - 100.
+    if not utils.QC(interp.temp(prof, pbot)): pbot = prof.pres[prof.sfc]
+    if not utils.QC(interp.temp(prof, ptop)): return ma.masked
+    if exact:
+        ind1 = np.where(pbot > prof.pres)[0].min()
+        ind2 = np.where(ptop < prof.pres)[0].max()
+        dewpoint1 = interp.dwpt(prof, pbot)
+        dewpoint2 = interp.dwpt(prof, ptop)
+        dewpoint = np.ma.empty(prof.pres[ind1:ind2+1].shape)
+        for i in np.arange(0, len(dewpoint), 1):
+            dewpoint[i] = prof.dwpc[ind1:ind2+1][i]
+        mask = ~dewpoint.mask
+        dewpoint = np.concatenate([[dewpoint1], dewpoint[mask], dewpoint[mask], [dewpoint2]])
+        tott = dewpoint.sum() / 2.
+        num = float(len(dewpoint)) / 2.
+        dpt = tott / num
+    else:
+        dp = -1
+        p = np.arange(pbot, ptop+dp, dp, dtype=type(pbot))
+        dewpoint = interp.dwpt(prof, p)
+        dpt = ma.average(dewpoint, weights=p)
+    return dpt
+
 def mean_wetbulb(prof, pbot=None, ptop=None, dp=-1, exact=False):
     '''
         Calculates the mean wetbulb temperature from a profile object within the
@@ -1118,7 +1167,7 @@ def mean_wetbulb(prof, pbot=None, ptop=None, dp=-1, exact=False):
         ind1 = np.where(pbot > prof.pres)[0].min()
         ind2 = np.where(ptop < prof.pres)[0].max()
         wetbulb1 = thermo.wetbulb(pbot, interp.temp(prof, pbot), interp.dwpt(prof, pbot))
-        wetbulb2 = thermo.wetbulb(ptop, interp.temp(prof, ptop), interp.dwpt(prof, pbot))
+        wetbulb2 = thermo.wetbulb(ptop, interp.temp(prof, ptop), interp.dwpt(prof, ptop))
         wetbulb = np.ma.empty(prof.pres[ind1:ind2+1].shape)
         for i in np.arange(0, len(wetbulb), 1):
             wetbulb[i] = thermo.wetbulb(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i], prof.dwpc[ind1:ind2+1][i])
@@ -1170,7 +1219,7 @@ def mean_thetae(prof, pbot=None, ptop=None, dp=-1, exact=False):
         ind1 = np.where(pbot > prof.pres)[0].min()
         ind2 = np.where(ptop < prof.pres)[0].max()
         thetae1 = thermo.thetae(pbot, interp.temp(prof, pbot), interp.dwpt(prof, pbot))
-        thetae2 = thermo.thetae(ptop, interp.temp(prof, ptop), interp.dwpt(prof, pbot))
+        thetae2 = thermo.thetae(ptop, interp.temp(prof, ptop), interp.dwpt(prof, ptop))
         thetae = np.ma.empty(prof.pres[ind1:ind2+1].shape)
         for i in np.arange(0, len(thetae), 1):
             thetae[i] = thermo.thetae(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i], prof.dwpc[ind1:ind2+1][i])
@@ -1321,7 +1370,7 @@ def mean_thetaw(prof, pbot=None, ptop=None, dp=-1, exact=False):
         ind1 = np.where(pbot > prof.pres)[0].min()
         ind2 = np.where(ptop < prof.pres)[0].max()
         thetaw1 = thermo.thetaw(pbot, interp.temp(prof, pbot), interp.dwpt(prof, pbot))
-        thetaw2 = thermo.thetaw(ptop, interp.temp(prof, ptop), interp.dwpt(prof, pbot))
+        thetaw2 = thermo.thetaw(ptop, interp.temp(prof, ptop), interp.dwpt(prof, ptop))
         thetaw = np.ma.empty(prof.pres[ind1:ind2+1].shape)
         for i in np.arange(0, len(thetaw), 1):
             thetaw[i] = thermo.thetaw(prof.pres[ind1:ind2+1][i],  prof.tmpc[ind1:ind2+1][i], prof.dwpc[ind1:ind2+1][i])
@@ -4930,23 +4979,22 @@ def ssi850(prof):
 
     return ssi850
 
-def fmi(prof):
+def fmwi(prof):
     '''
-        Fawbush-Miller Index (*)
+        Fawbush-Miller Wetbulb Index (*)
 
-        Formulation taken from
-        AWS/TR-79/006, The Use of the Skew T, Log P Diagram in Analysis and Forecasting
-        December 1979 (Revised March 1990), pg. 5-36.
+        Formulation taken from Fawbush and Miller 1954, BAMS v.35 pgs. 154-165.
 
-        This index is roughly similar to the Lifted Index; however, it uses the mean wetbulb
-        temperature in the moist layer near the surface, which is defined as the lowest layer
-        in which the relative humidity is at or above 65 percent.  As such, the top of this
-        layer is defined as the height at which the relative humidity decreases to 65 percent.
-        If the layer top is over 150 mb above the surface, then the thickness of the moist
-        layer is arbitrarly set to 150 mb.
-
-        If the air in the first 150 mb is dryer than 65 percent relative humidity, then the
-        index is not computed.
+        This index (referred to in the source paper as the Stability Index and in most other
+        sources as the Fawbush-Miller Index) is roughly similar to the Lifted Index; however,
+        it uses the mean wetbulb temperature in the moist layer, which is defined as the
+        lowest layer in which the relative humidity is at or above 65 percent.  As such, the
+        bottom of this layer is defined as either the surface (if the surface relative humidity
+        is less than 65 percent) or the layer in which the relative humidity rises to 65
+        percent.  The top of this layer is defined as the height at which the relative humidity
+        decreases to 65 percent. If the layer top is over 150 mb above the layer bottom, then
+        the height of the top of the moist layer is arbitrarly set to 150 mb above the bottom
+        level.
 
         Negative values indicate increasing chances for convective and even severe weather.
 
@@ -4958,14 +5006,14 @@ def fmi(prof):
 
         Returns
         -------
-        fmi : number
-            Fawbush-Miller Index (number)
+        fmwi : number
+            Fawbush-Miller Wetbulb Index (number)
     '''
 
     # Find moist layer thickness
     dp = -1
-    sfc_pres = prof.pres[prof.sfc]
-    ps = np.arange(sfc_pres, 499, dp)
+    psfc = prof.pres[prof.sfc]
+    ps = np.arange(psfc, 499, dp)
     plog = np.log10(ps)
     temp = interp.temp(prof, ps)
     dwpt = interp.dwpt(prof, ps)
@@ -5004,74 +5052,160 @@ def fmi(prof):
             if rhlr[0] > 0:
                 relhp0 = np.power(10, np.interp(65, [relh[ind_x+1][0], relh[ind_x][0]],
                         [plog[ind_x+1][0], plog[ind_x][0]]))
+                lyr_bot = psfc
+                lyr_top = relhp0
             else:
                 relhp0 = np.power(10, np.interp(65, [relh[ind_x][0], relh[ind_x+1][0]],
                         [plog[ind_x][0], plog[ind_x+1][0]]))
+                lyr_bot = relhp0
             if not utils.QC(rhlr[1]):
                 relhp1 = ma.masked
+                try:
+                    lyr_top = lyr_bot - 150
+                except:
+                    rhlr[0] > 0
             else:
                 if rhlr[1] > 0:
                     relhp1 = np.power(10, np.interp(65, [relh[ind_x+1][1], relh[ind_x][1]],
                             [plog[ind_x+1][1], plog[ind_x][1]]))
+                    lyr_top = relhp1
                 else:
                     relhp1 = np.power(10, np.interp(65, [relh[ind_x][1], relh[ind_x+1][1]],
                             [plog[ind_x][1], plog[ind_x+1][1]]))
-
-    pr_lv0 = sfc_pres - relhp0
-    pr_lv1 = sfc_pres - relhp1
-
-    if pr_lv0 <= 150:
-        if rhlr[0] > 0:
-            relhp = relhp0
-        else:
-            if pr_lv1 <= 150:
-                relhp = relhp1
-            else:
-                relhp = sfc_pres - 150
-    else:
-        if rhlr[0] > 0:
-            relhp = sfc_pres - 150
-        else:
-            relhp = ma.masked
     
-    # Find mean wetbulb temperature and corresponding pressure value
-    if not utils.QC(relhp):
-        return ma.masked
+    # Determine whether the moist layer's thickness is greater than 150 mb;
+    # if so, then reduce it down to 150 mb above the bottom layer
+    if lyr_bot - lyr_top <= 150:
+        lyr_thk = lyr_bot - lyr_top
     else:
-        ml_wtb = mean_wetbulb(prof, pbot=sfc_pres, ptop=relhp)
-        ind3 = ma.where(wetbulb >= ml_wtb)[0]
-        ind4 = ma.where(wetbulb <= ml_wtb)[0]
-        if len(ind3) == 0 or len(ind4) == 0:
-            mwbp = ma.masked
+        lyr_thk = 150
+        lyr_top = lyr_bot - 150
+    
+    # Find mean wetbulb temperature, then lift from the middle of the moist layer
+    mn_wtb = mean_wetbulb(prof, pbot=lyr_bot, ptop=lyr_top)
+    mid_lyr_pr = lyr_bot - ( lyr_thk / 2 )
+    
+    vt500 = interp.vtmp(prof, 500)
+    lift_mn_wtb = thermo.wetlift(mid_lyr_pr, mn_wtb, 500)
+    vt_pcl500 = thermo.virtemp(500, lift_mn_wtb, lift_mn_wtb)
+
+    fmwi = vt500 - vt_pcl500
+
+    return fmwi
+
+def fmdi(prof):
+    '''
+        Fawbush-Miller Dewpoint Index (*)
+
+        Formulation taken from Fawbush and Miller 1954, BAMS v.35 pgs. 154-165.
+
+        This index (referred to in the source paper as the Dew-Point Index) is roughly similar
+        to the Lifted Index; however, it uses the mean dewpoint temperature in the moist layer,
+        which is defined as the lowest layer in which the relative humidity is at or above 65
+        percent.  As such, the bottom of this layer is defined as either the surface (if the
+        surface relative humidity is less than 65 percent) or the layer in which the relative
+        humidity rises to 65 percent.  The top of this layer is defined as the height at which
+        the relative humidity decreases to 65 percent. If the layer top is over 150 mb above the
+        layer bottom, then the height of the top of the moist layer is arbitrarly set to 150 mb
+        above the bottom level.
+
+        Values that are only slightly positive (+2 or below) indicate a slight chance of convection.
+        Negative values indicate increasing chances for convective and even severe weather.
+
+        The version used here makes use of the virtual temperature correction.
+
+        Parameters
+        ----------
+        prof : Profile object
+
+        Returns
+        -------
+        fmdi : number
+            Fawbush-Miller Dewpoint Index (number)
+    '''
+
+    # Find moist layer thickness
+    dp = -1
+    psfc = prof.pres[prof.sfc]
+    ps = np.arange(psfc, 499, dp)
+    plog = np.log10(ps)
+    temp = interp.temp(prof, ps)
+    dwpt = interp.dwpt(prof, ps)
+    hght = interp.hght(prof, ps)
+    wetbulb = np.empty(ps.shape)
+    relh = np.empty(ps.shape)
+    for i in np.arange(0, len(ps), 1):
+        wetbulb[i] = thermo.wetbulb(ps[i], temp[i], dwpt[i])
+        relh[i] = thermo.relh(ps[i], temp[i], dwpt[i])
+
+    ind1 = ma.where(relh >= 65)[0]
+    ind2 = ma.where(relh <= 65)[0]
+    if len(ind1) == 0 or len(ind2) == 0:
+        relhp0 = ma.masked
+        relhp1 = ma.masked
+    else:
+        inds1 = np.intersect1d(ind1, ind2)
+        if len(inds1) == 1:
+            relhp0 = prof.pres[inds1][0]
+        elif len(inds1) == 2:
+            relhp0 = prof.pres[inds1][0]
+            relhp1 = prof.pres[inds1][1]
         else:
-            inds2 = np.intersect1d(ind3, ind4)
-            if len(inds2) > 0:
-                mwbp = prof.pres[inds2][0]
+            diff1 = ind1[1:] - ind1[:-1]
+            diff2 = ind2[1:] - ind2[:-1]
+            inda = np.where(diff1 > 1)[0]
+            indb = np.where(diff2 > 1)[0] + inda + 1
+            if not utils.QC(inda) or not utils.QC(indb):
+                ind_x = ind1[-1]
             else:
-                diff3 = ind3[1:] - ind3[:-1]
-                ind_y = np.where(diff3 > 1)[0] + 1
+                ind_x = ma.append(inda, indb)
+    
+            #Identify layers that either increase or decrease in RH, then arrange interpolation settings accordingly
+            rhlr = ( ( relh[ind_x+1] - relh[ind_x] ) / ( hght[ind_x+1] - hght[ind_x] ) ) * -100
+
+            if rhlr[0] > 0:
+                relhp0 = np.power(10, np.interp(65, [relh[ind_x+1][0], relh[ind_x][0]],
+                        [plog[ind_x+1][0], plog[ind_x][0]]))
+                lyr_bot = psfc
+                lyr_top = relhp0
+            else:
+                relhp0 = np.power(10, np.interp(65, [relh[ind_x][0], relh[ind_x+1][0]],
+                        [plog[ind_x][0], plog[ind_x+1][0]]))
+                lyr_bot = relhp0
+            if not utils.QC(rhlr[1]):
+                relhp1 = ma.masked
                 try:
-                    ind_y = ind_y.min()
+                    lyr_top = lyr_bot - 150
                 except:
-                    ind_y = ind3[-1]
-        
-                # Arrange interpolation settings using wetbulb lapse rate
-                wtblr = ( ( wetbulb[ind_x+1] - wetbulb[ind_x] ) / ( hght[ind_x+1] - hght[ind_x] ) ) * -1000
-        
-                if wtblr[0] > 0:
-                    mwbp = np.power(10, np.interp(ml_wtb, [wetbulb[ind_y+1], wetbulb[ind_y]],
-                            [plog[ind_y+1], plog[ind_y]]))
+                    rhlr[0] > 0
+            else:
+                if rhlr[1] > 0:
+                    relhp1 = np.power(10, np.interp(65, [relh[ind_x+1][1], relh[ind_x][1]],
+                            [plog[ind_x+1][1], plog[ind_x][1]]))
+                    lyr_top = relhp1
                 else:
-                    mwbp = np.power(10, np.interp(ml_wtb, [wetbulb[ind_y], wetbulb[ind_y+1]],
-                            [plog[ind_y], plog[ind_y+1]]))
+                    relhp1 = np.power(10, np.interp(65, [relh[ind_x][1], relh[ind_x+1][1]],
+                            [plog[ind_x][1], plog[ind_x+1][1]]))
     
-        vt500 = interp.vtmp(prof, 500)
-        lift_ml_wtb = thermo.wetlift(mwbp, ml_wtb, 500)
-        vt_pcl500 = thermo.virtemp(500, lift_ml_wtb, lift_ml_wtb)
+    # Determine whether the moist layer's thickness is greater than 150 mb;
+    # if so, then reduce it down to 150 mb above the bottom layer
+    if lyr_bot - lyr_top <= 150:
+        lyr_thk = lyr_bot - lyr_top
+    else:
+        lyr_thk = 150
+        lyr_top = lyr_bot - 150
+    
+    # Find mean dewpoint temperature, then lift from the middle of the moist layer
+    mn_dpt = mean_dewpoint(prof, pbot=lyr_bot, ptop=lyr_top)
+    mid_lyr_pr = lyr_bot - ( lyr_thk / 2 )
+    
+    vt500 = interp.vtmp(prof, 500)
+    lift_mn_dpt = thermo.wetlift(mid_lyr_pr, mn_dpt, 500)
+    vt_pcl500 = thermo.virtemp(500, lift_mn_dpt, lift_mn_dpt)
 
-        fmi = vt500 - vt_pcl500
+    fmdi = vt500 - vt_pcl500
 
-        return fmi
+    return fmdi
 
 def martin(prof):
     '''

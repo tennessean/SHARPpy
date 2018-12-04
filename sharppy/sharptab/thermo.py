@@ -8,7 +8,7 @@ from sharppy.sharptab.utils import *
 from sharppy.sharptab.constants import *
 
 __all__ = ['drylift', 'thalvl', 'lcltemp', 'theta', 'wobf']
-__all__ += ['satlift', 'wetlift', 'lifted', 'vappres', 'mixratio']
+__all__ += ['satlift', 'wetlift', 'lifted', 'lifted_mod', 'vappres', 'mixratio']
 __all__ += ['temp_at_mixrat', 'wetbulb', 'thetaw', 'thetaws', 'thetae', 'thetaes']
 __all__ += ['thetad', 'thetads', 'thetav', 'virtemp', 'sat_temp', 'relh']
 __all__ += ['ftoc', 'ctof', 'ctok', 'ktoc', 'ftok', 'ktof']
@@ -464,6 +464,45 @@ def lifted(p, t, td, lev):
     '''
     p2, t2 = drylift(p, t, td)
     return wetlift(p2, t2, lev)
+
+
+def lifted_mod(p, t, td, lev):
+    '''
+    A modification of the "lifted" function (q.v.) that calculates the
+    ambient and dewpoint temperatures (C) of a parcel lifted to the
+    specified level.  First, the level of the Lifted Condensation Level
+    (LCL) is determined.  If the level to be lifted to lies below the
+    LCL, then the parcel is only lifted dry-adiabatically to its new
+    level.  If the level to be lifted lies at or above the LCL, then
+    the parcel is lifted first dry-adiabatically to the LCL, then
+    lifted moist-adiabatically to its new level.
+
+    Parameters
+    ----------
+    p : number, numpy array
+        Pressure of initial parcel in hPa
+    t : number, numpy array
+        Temperature of inital parcel in C
+    td : number, numpy array
+        Dew Point of initial parcel in C
+
+    Returns
+    -------
+    t2 : number, numpy array
+        Temperature in C
+    td2 : number, numpy array
+        Dew Point temperature in C
+    '''
+    plcl = drylift(p, t, td)[0]
+    if lev > plcl:
+        t2 = theta(p, t, lev)
+        mxr_p = mixratio(p, td)
+        td2 = temp_at_mixrat(mxr_p, lev)
+        return t2, td2
+    else:
+        t2 = lifted(p, t, td, lev)
+        td2 = t2
+        return t2, td2
 
 
 def vappres(t):
